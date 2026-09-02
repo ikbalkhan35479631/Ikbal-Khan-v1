@@ -1,0 +1,6 @@
+{
+  "name": "TG Video Downloader",
+  "description": "Download any Telegram private or public video of any size with chunked multi-stream acceleration and resume support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
