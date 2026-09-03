@@ -192,11 +192,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val analysis = MultiPlatformVideoResolver.analyzeUrl(newUrl)
             _platformAnalysis.value = analysis
             _selectedPlatform.value = analysis.platform
-            if (_customTitle.value.isBlank() || _customTitle.value.startsWith("Telegram_") ||
-                _customTitle.value.startsWith("TG_") || _customTitle.value.startsWith("YouTube_") ||
-                _customTitle.value.startsWith("Facebook_") || _customTitle.value.startsWith("Instagram_")
-            ) {
-                _customTitle.value = analysis.suggestedTitle
+            _customTitle.value = analysis.suggestedTitle
+
+            // If YouTube, asynchronously fetch real video title
+            if (analysis.platform == SupportedPlatform.YOUTUBE) {
+                viewModelScope.launch {
+                    val realTitle = MultiPlatformVideoResolver.fetchYouTubeVideoTitle(newUrl)
+                    if (!realTitle.isNullOrBlank() && _urlInput.value == newUrl) {
+                        _customTitle.value = "$realTitle.mp4"
+                    }
+                }
             }
         } else {
             _platformAnalysis.value = null
@@ -378,7 +383,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeDownload(id: Long) {
-        downloaderEngine.startOrResumeDownload(id)
+        viewModelScope.launch {
+            val item = repository.getById(id)
+            if (item != null) {
+                if (item.status == DownloadStatus.FAILED || MultiPlatformVideoResolver.isWebPageUrl(item.downloadUrl)) {
+                    try {
+                        val analysis = MultiPlatformVideoResolver.analyzeUrl(item.originalUrl)
+                        val freshUrl = if (analysis.platform == SupportedPlatform.TELEGRAM) {
+                            val tgParsed = TelegramLinkParser.parse(item.originalUrl)
+                            privateHelper.resolveDownloadUrl(tgParsed)
+                        } else {
+                            MultiPlatformVideoResolver.resolveStreamUrl(
+                                item.originalUrl,
+                                analysis.platform,
+                                _selectedQuality.value
+                            )
+                        }
+                        repository.update(item.copy(downloadUrl = freshUrl, errorMessage = null, status = DownloadStatus.QUEUED))
+                    } catch (e: Exception) {
+                        repository.update(item.copy(errorMessage = e.message ?: "Failed to re-resolve video link"))
+                        return@launch
+                    }
+                }
+                downloaderEngine.startOrResumeDownload(id)
+            }
+        }
     }
 
     fun cancelDownload(id: Long) {
@@ -393,7 +422,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             activeDownloads.value.forEach { item ->
                 if (item.status == DownloadStatus.PAUSED || item.status == DownloadStatus.QUEUED || item.status == DownloadStatus.FAILED) {
-                    downloaderEngine.startOrResumeDownload(item.id)
+                    resumeDownload(item.id)
                 }
             }
         }

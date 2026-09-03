@@ -181,22 +181,37 @@ class TelegramVideoDownloaderEngine(
             )
         }
 
-        // 3. Check for unconverted web video page URLs
-        if (item.downloadUrl.contains("youtube.com/watch") || item.downloadUrl.contains("youtu.be/") ||
-            item.downloadUrl.contains("facebook.com") || item.downloadUrl.contains("instagram.com/p/") ||
-            item.downloadUrl.contains("instagram.com/reel/") || item.downloadUrl.contains("tiktok.com/@")
-        ) {
-            throw IllegalStateException(
-                "ভিডিও স্ট্রিম লিঙ্ক পাওয়া যায়নি বা অনলাইন সার্ভার ব্যস্ত। অনুগ্রহ করে সরাসরি ভিডিও স্ট্রিম লিঙ্ক দিন অথবা পুনরায় চেষ্টা করুন।"
-            )
+        // 3. Check for unconverted web video page URLs and attempt auto-resolution
+        var targetUrl = item.downloadUrl
+        if (MultiPlatformVideoResolver.isWebPageUrl(targetUrl)) {
+            try {
+                val analysis = MultiPlatformVideoResolver.analyzeUrl(item.originalUrl)
+                val resolved = MultiPlatformVideoResolver.resolveStreamUrl(
+                    item.originalUrl,
+                    analysis.platform,
+                    VideoQuality.RES_720P
+                )
+                if (!MultiPlatformVideoResolver.isWebPageUrl(resolved)) {
+                    targetUrl = resolved
+                    downloadDao.update(item.copy(downloadUrl = resolved))
+                } else {
+                    throw IllegalStateException(
+                        "ভিডিও স্ট্রিম লিঙ্ক সংগ্রহ করা যায়নি (অনলাইন স্ট্রিমিং সার্ভার ব্যস্ত)। অনুগ্রহ করে 'পুনরায় চেষ্টা করুন' চাপুন অথবা সরাসরি ভিডিও স্ট্রিম লিঙ্ক দিন।"
+                    )
+                }
+            } catch (e: Exception) {
+                throw IllegalStateException(
+                    e.message ?: "ভিডিও স্ট্রিম লিঙ্ক সংগ্রহ করা যায়নি (অনলাইন স্ট্রিমিং সার্ভার ব্যস্ত)। অনুগ্রহ করে 'পুনরায় চেষ্টা করুন' চাপুন।"
+                )
+            }
         }
 
         var downloadedBytes = if (partFile.exists()) partFile.length() else 0L
 
         // Prepare request with Range header for resuming big files
         val requestBuilder = Request.Builder()
-            .url(item.downloadUrl)
-            .addHeader("User-Agent", "Mozilla/5.0 (Android; TelegramDownloader/2.0)")
+            .url(targetUrl)
+            .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
         if (downloadedBytes > 0) {
             requestBuilder.addHeader("Range", "bytes=$downloadedBytes-")
@@ -211,8 +226,8 @@ class TelegramVideoDownloaderEngine(
                 partFile.delete()
                 downloadedBytes = 0L
                 val freshRequest = Request.Builder()
-                    .url(item.downloadUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Android; TelegramDownloader/2.0)")
+                    .url(targetUrl)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                     .build()
                 val retryResponse = okHttpClient.newCall(freshRequest).execute()
                 if (!retryResponse.isSuccessful) {
@@ -244,10 +259,10 @@ class TelegramVideoDownloaderEngine(
                         val json = JSONObject(preview)
                         "Telegram API Error: " + json.optString("description")
                     } catch (e: Exception) {
-                        "সার্ভার থেকে ভিডিও ফাইলের বদলে এইচটিএমএল/এরর পেজ এসেছে ($contentType)"
+                        "সার্ভার থেকে ভিডিওর পরিবর্তে এরর পেজ এসেছে ($contentType)"
                     }
                 } else {
-                    "সার্ভার থেকে ভিডিও ফাইলের বদলে এইচটিএমএল/ওয়েবপেজ এসেছে ($contentType)"
+                    "সার্ভার থেকে ভিডিওর পরিবর্তে ওয়েবপেজ এসেছে। স্ট্রিমিং সার্ভার লিঙ্ক জেনারেট করতে পারেনি। অনুগ্রহ করে 'পুনরায় চেষ্টা করুন' চাপুন।"
                 }
             )
         }

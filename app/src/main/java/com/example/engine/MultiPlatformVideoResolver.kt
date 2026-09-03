@@ -203,6 +203,24 @@ object MultiPlatformVideoResolver {
     }
 
     /**
+     * Checks if a URL is an HTML webpage rather than a direct downloadable stream
+     */
+    fun isWebPageUrl(url: String): Boolean {
+        val lower = url.trim().lowercase()
+        return lower.contains("youtube.com") ||
+                lower.contains("youtu.be") ||
+                lower.contains("facebook.com") ||
+                lower.contains("fb.watch") ||
+                lower.contains("fb.com") ||
+                lower.contains("instagram.com") ||
+                lower.contains("tiktok.com") ||
+                lower.contains("twitter.com") ||
+                lower.contains("x.com") ||
+                lower.startsWith("https://t.me/") ||
+                lower.startsWith("http://t.me/")
+    }
+
+    /**
      * Resolves the actual direct downloadable stream URL for the platform
      */
     suspend fun resolveStreamUrl(
@@ -220,11 +238,12 @@ object MultiPlatformVideoResolver {
             }
         }
 
-        // 2. Direct Web URLs or CDN links (mp4, webm, mkv, cloud storage)
+        // 2. Direct Web URLs or CDN links (mp4, webm, mkv, mp3, cloud storage)
         if (platform == SupportedPlatform.WEB_DIRECT ||
             trimmed.endsWith(".mp4", ignoreCase = true) ||
             trimmed.endsWith(".webm", ignoreCase = true) ||
             trimmed.endsWith(".mkv", ignoreCase = true) ||
+            trimmed.endsWith(".mp3", ignoreCase = true) ||
             trimmed.contains("commondatastorage.googleapis.com") ||
             trimmed.contains("googleusercontent.com") ||
             trimmed.contains(".cdninstagram.com") ||
@@ -233,10 +252,25 @@ object MultiPlatformVideoResolver {
             return@withContext trimmed
         }
 
-        // 3. For YouTube: Try Invidious public streaming instances first for direct mp4 links
+        // 3. For TikTok: Try TikWM first (fastest and cleanest no-watermark MP4 stream)
+        if (platform == SupportedPlatform.TIKTOK) {
+            val tikWmStream = tryTikWMExtractor(trimmed)
+            if (!tikWmStream.isNullOrBlank()) {
+                return@withContext tikWmStream
+            }
+        }
+
+        // 4. For YouTube & YouTube Shorts: Try Piped API first, then Invidious instances
         if (platform == SupportedPlatform.YOUTUBE) {
             val videoId = extractYouTubeId(trimmed)
             if (videoId.isNotBlank()) {
+                // First try Piped API (high reliability for YouTube Shorts & Videos)
+                val pipedStream = tryPipedStream(videoId, quality)
+                if (!pipedStream.isNullOrBlank()) {
+                    return@withContext pipedStream
+                }
+
+                // Next try Invidious public streaming instances
                 val invidiousStream = tryInvidiousStream(videoId, quality)
                 if (!invidiousStream.isNullOrBlank()) {
                     return@withContext invidiousStream
@@ -244,21 +278,96 @@ object MultiPlatformVideoResolver {
             }
         }
 
-        // 4. Try public high-speed Cobalt video stream extractors
+        // 5. Try Cobalt multi-endpoint video stream extractors (supports YouTube, FB, Insta, TikTok, Twitter/X)
         val cobaltStream = tryCobaltExtractor(trimmed, quality)
         if (!cobaltStream.isNullOrBlank()) {
             return@withContext cobaltStream
         }
 
-        // 5. If all online resolvers are unreachable, return original URL
+        // 6. If it's a webpage URL and could not be resolved, throw explicit error
+        if (isWebPageUrl(trimmed)) {
+            throw IllegalStateException(
+                "অনলাইন সার্ভার এই ভিডিওর সরাসরি স্ট্রিমিং লিঙ্ক তৈরি করতে পারেনি। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন অথবা ভিডিওর সরাসরি mp4 লিঙ্ক দিন।"
+            )
+        }
+
+        // Fallback
         return@withContext trimmed
+    }
+
+    private fun tryPipedStream(videoId: String, quality: VideoQuality): String? {
+        val instances = listOf(
+            "https://pipedapi.kavin.rocks",
+            "https://api.piped.privacydev.net",
+            "https://pipedapi.tokhmi.xyz",
+            "https://piped-api.garudalinux.org",
+            "https://api.piped.projectsegfau.lt",
+            "https://pipedapi.leptons.xyz"
+        )
+
+        for (instance in instances) {
+            try {
+                val request = Request.Builder()
+                    .url("$instance/streams/$videoId")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .build()
+
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val bodyStr = response.body?.string() ?: return@use
+                    val json = JSONObject(bodyStr)
+
+                    if (quality == VideoQuality.AUDIO_MP3) {
+                        val audioStreams = json.optJSONArray("audioStreams")
+                        if (audioStreams != null && audioStreams.length() > 0) {
+                            for (j in 0 until audioStreams.length()) {
+                                val aObj = audioStreams.getJSONObject(j)
+                                val aUrl = aObj.optString("url")
+                                if (aUrl.isNotBlank() && aUrl.startsWith("http")) {
+                                    return aUrl
+                                }
+                            }
+                        }
+                    }
+
+                    val videoStreams = json.optJSONArray("videoStreams") ?: return@use
+                    var fallbackUrl: String? = null
+                    val targetRes = quality.resolution
+
+                    for (i in 0 until videoStreams.length()) {
+                        val stream = videoStreams.getJSONObject(i)
+                        val streamUrl = stream.optString("url")
+                        val res = stream.optString("quality")
+                        val format = stream.optString("format")
+                        val videoOnly = stream.optBoolean("videoOnly", false)
+
+                        if (streamUrl.isNotBlank() && streamUrl.startsWith("http")) {
+                            if (!videoOnly && (format.contains("MPEG", true) || format.contains("MP4", true))) {
+                                if (fallbackUrl == null) fallbackUrl = streamUrl
+                                if (res.contains(targetRes)) {
+                                    return streamUrl
+                                }
+                            } else if (fallbackUrl == null) {
+                                fallbackUrl = streamUrl
+                            }
+                        }
+                    }
+                    if (fallbackUrl != null) return fallbackUrl
+                }
+            } catch (e: Exception) {
+                Log.d("MultiPlatformResolver", "Piped instance $instance failed: ${e.message}")
+            }
+        }
+        return null
     }
 
     private fun tryInvidiousStream(videoId: String, quality: VideoQuality): String? {
         val instances = listOf(
             "https://inv.nadeko.net",
             "https://invidious.nerdvpn.de",
-            "https://invidious.drgns.space",
+            "https://invidious.private.coffee",
+            "https://iv.melmac.space",
+            "https://invidious.jing.rocks",
             "https://yt.artemislena.eu"
         )
 
@@ -273,9 +382,23 @@ object MultiPlatformVideoResolver {
                     if (!response.isSuccessful) return@use
                     val bodyStr = response.body?.string() ?: return@use
                     val json = JSONObject(bodyStr)
+
+                    if (quality == VideoQuality.AUDIO_MP3) {
+                        val adaptiveFormats = json.optJSONArray("adaptiveFormats")
+                        if (adaptiveFormats != null) {
+                            for (j in 0 until adaptiveFormats.length()) {
+                                val aObj = adaptiveFormats.getJSONObject(j)
+                                val type = aObj.optString("type")
+                                val aUrl = aObj.optString("url")
+                                if (type.contains("audio") && aUrl.isNotBlank()) {
+                                    return aUrl
+                                }
+                            }
+                        }
+                    }
+
                     val formatStreams = json.optJSONArray("formatStreams") ?: return@use
 
-                    // Find best matching stream
                     var chosenUrl: String? = null
                     val targetRes = quality.resolution
 
@@ -285,9 +408,9 @@ object MultiPlatformVideoResolver {
                         val resolution = stream.optString("resolution")
                         val container = stream.optString("container")
 
-                        if (streamUrl.isNotBlank()) {
+                        if (streamUrl.isNotBlank() && streamUrl.startsWith("http")) {
                             if (chosenUrl == null) chosenUrl = streamUrl
-                            if (resolution.contains(targetRes) && container == "mp4") {
+                            if (resolution.contains(targetRes) && container.equals("mp4", ignoreCase = true)) {
                                 return streamUrl
                             }
                         }
@@ -301,17 +424,47 @@ object MultiPlatformVideoResolver {
         return null
     }
 
+    private fun tryTikWMExtractor(url: String): String? {
+        try {
+            val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+            val request = Request.Builder()
+                .url("https://www.tikwm.com/api/?url=$encoded")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val bodyStr = response.body?.string() ?: return null
+                val json = JSONObject(bodyStr)
+                if (json.optInt("code") == 0) {
+                    val data = json.optJSONObject("data")
+                    val playUrl = data?.optString("play") ?: ""
+                    if (playUrl.startsWith("http")) {
+                        return playUrl
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("MultiPlatformResolver", "TikWM extractor failed: ${e.message}")
+        }
+        return null
+    }
+
     private fun tryCobaltExtractor(url: String, quality: VideoQuality): String? {
         val endpoints = listOf(
-            "https://api.cobalt.tools/api/json",
-            "https://cobalt-backend.canine.tools/api/json"
+            "https://cobalt-backend.canine.tools/api/json",
+            "https://api.wuk.sh/api/json",
+            "https://co.wuk.sh/api/json",
+            "https://cobalt.api.kwiatekm.tokyo/api/json",
+            "https://api.cobalt.tools/api/json"
         )
 
         val jsonBody = JSONObject().apply {
             put("url", url)
-            put("vQuality", quality.resolution)
+            put("vQuality", if (quality.resolution == "mp3") "720" else quality.resolution)
             if (quality == VideoQuality.AUDIO_MP3) {
                 put("isAudioOnly", true)
+                put("aFormat", "mp3")
             }
         }
 
@@ -343,21 +496,49 @@ object MultiPlatformVideoResolver {
         return null
     }
 
+    /**
+     * Extracts YouTube video ID using comprehensive regex patterns
+     */
     fun extractYouTubeId(url: String): String {
-        return try {
-            val uri = URI(url)
-            val host = uri.host ?: ""
-            if (host.contains("youtu.be")) {
-                uri.path.removePrefix("/").substringBefore("?")
-            } else if (uri.path.contains("/shorts/")) {
-                uri.path.substringAfter("/shorts/").substringBefore("?").substringBefore("/")
-            } else {
-                val query = uri.query ?: ""
-                query.split("&").firstOrNull { it.startsWith("v=") }?.substringAfter("v=") ?: ""
+        val patterns = listOf(
+            Regex("""youtu\.be/([a-zA-Z0-9_-]{11})"""),
+            Regex("""shorts/([a-zA-Z0-9_-]{11})"""),
+            Regex("""v=([a-zA-Z0-9_-]{11})"""),
+            Regex("""embed/([a-zA-Z0-9_-]{11})"""),
+            Regex("""/v/([a-zA-Z0-9_-]{11})""")
+        )
+        for (pattern in patterns) {
+            val match = pattern.find(url)
+            if (match != null) return match.groupValues[1]
+        }
+        return ""
+    }
+
+    /**
+     * Fetches real video title using YouTube oEmbed
+     */
+    suspend fun fetchYouTubeVideoTitle(url: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+            val oembedUrl = "https://www.youtube.com/oembed?url=$encoded&format=json"
+            val request = Request.Builder()
+                .url(oembedUrl)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val json = JSONObject(response.body?.string() ?: "")
+                    val title = json.optString("title")
+                    if (title.isNotBlank()) {
+                        return@withContext title.replace(Regex("""[\\/:*?"<>|]"""), "_").take(60)
+                    }
+                }
             }
         } catch (e: Exception) {
-            ""
+            // ignore
         }
+        return@withContext null
     }
 
     fun extractGoogleDriveId(url: String): String {
