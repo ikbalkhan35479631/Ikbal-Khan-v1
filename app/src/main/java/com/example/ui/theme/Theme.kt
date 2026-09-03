@@ -13,11 +13,11 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = TelegramBlue,
-    onPrimary = Color.White,
-    primaryContainer = TelegramDarkBlue,
-    onPrimaryContainer = Color.White,
-    secondary = TelegramLightBlue,
+    primary = VipGold,
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF332900),
+    onPrimaryContainer = VipGoldLight,
+    secondary = VipAmber,
     onSecondary = Color.Black,
     tertiary = TelegramAccent,
     background = DarkBackground,
@@ -25,27 +25,28 @@ private val DarkColorScheme =
     surface = DarkSurface,
     onSurface = Color.White,
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFFCDD9E5),
+    onSurfaceVariant = Color(0xFFE2E4EB),
     outline = DarkOutline
   )
 
 private val LightColorScheme =
   lightColorScheme(
-    primary = TelegramDarkBlue,
+    primary = Color(0xFF8A6D00),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD6EFFF),
-    onPrimaryContainer = Color(0xFF003352),
-    secondary = TelegramBlue,
+    primaryContainer = Color(0xFFFFF3CD),
+    onPrimaryContainer = Color(0xFF473700),
+    secondary = Color(0xFFD48806),
     onSecondary = Color.White,
-    tertiary = TelegramAccent,
+    tertiary = TelegramBlue,
     background = LightBackground,
-    onBackground = Color(0xFF101923),
+    onBackground = Color(0xFF10141C),
     surface = LightSurface,
-    onSurface = Color(0xFF101923),
+    onSurface = Color(0xFF10141C),
     surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = Color(0xFF425466),
+    onSurfaceVariant = Color(0xFF3B4455),
     outline = LightOutline
   )
+
 
 @Composable
 fun MyApplicationTheme(

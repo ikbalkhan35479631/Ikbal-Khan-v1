@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lock
@@ -42,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -56,6 +59,9 @@ import com.example.ui.SavedVideosTab
 import com.example.ui.VideoPlayerDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.TelegramBlue
+import com.example.ui.theme.VipAmber
+import com.example.ui.theme.VipGold
+import com.example.ui.theme.VipGoldLight
 import com.example.ui.theme.WarningAmber
 
 class MainActivity : ComponentActivity() {
@@ -109,25 +115,30 @@ fun MainScreen(viewModel: MainViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
-                                .background(TelegramBlue),
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(VipGold, VipAmber)
+                                    )
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Download,
+                                imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                                tint = Color.Black,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Text(
-                            text = "TG Video Downloader",
+                            text = "VIP Video Downloader",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold,
+                            color = VipGold
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -135,14 +146,14 @@ fun MainScreen(viewModel: MainViewModel) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(WarningAmber.copy(alpha = 0.2f))
+                                .background(VipGold.copy(alpha = 0.2f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Private",
+                                text = "👑 VIP",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = WarningAmber
+                                color = VipGold
                             )
                         }
                     }
@@ -167,8 +178,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                     label = { Text("ডাউনলোডার", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = TelegramBlue,
-                        indicatorColor = TelegramBlue.copy(alpha = 0.15f)
+                        selectedIconColor = VipGold,
+                        selectedTextColor = VipGold,
+                        indicatorColor = VipGold.copy(alpha = 0.15f)
                     ),
                     modifier = Modifier.testTag("nav_downloader_tab")
                 )
@@ -181,8 +193,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         if (activeDownloads.isNotEmpty()) {
                             BadgedBox(
                                 badge = {
-                                    Badge(containerColor = TelegramBlue) {
-                                        Text("${activeDownloads.size}")
+                                    Badge(containerColor = VipGold, contentColor = Color.Black) {
+                                        Text("${activeDownloads.size}", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             ) {
@@ -194,8 +206,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                     label = { Text("চলমান", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = TelegramBlue,
-                        indicatorColor = TelegramBlue.copy(alpha = 0.15f)
+                        selectedIconColor = VipGold,
+                        selectedTextColor = VipGold,
+                        indicatorColor = VipGold.copy(alpha = 0.15f)
                     ),
                     modifier = Modifier.testTag("nav_active_tab")
                 )
@@ -221,8 +234,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                     label = { Text("সংরক্ষিত", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = TelegramBlue,
-                        indicatorColor = TelegramBlue.copy(alpha = 0.15f)
+                        selectedIconColor = VipGold,
+                        selectedTextColor = VipGold,
+                        indicatorColor = VipGold.copy(alpha = 0.15f)
                     ),
                     modifier = Modifier.testTag("nav_saved_tab")
                 )
@@ -236,8 +250,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                     label = { Text("প্রাইভেট গাইড", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = TelegramBlue,
-                        indicatorColor = TelegramBlue.copy(alpha = 0.15f)
+                        selectedIconColor = VipGold,
+                        selectedTextColor = VipGold,
+                        indicatorColor = VipGold.copy(alpha = 0.15f)
                     ),
                     modifier = Modifier.testTag("nav_guide_tab")
                 )

@@ -1,6 +1,7 @@
 {
-  "name": "TG Video Downloader",
-  "description": "Download any Telegram private or public video of any size with chunked multi-stream acceleration and resume support.",
+  "name": "VIP Video Downloader",
+  "description": "Download 10+ videos simultaneously in 4K/1080p high quality from Telegram, YouTube, Facebook, Instagram, Google and all web platforms with VIP Turbo multi-stream acceleration.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+

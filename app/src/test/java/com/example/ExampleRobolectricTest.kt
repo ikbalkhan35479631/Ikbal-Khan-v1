@@ -3,6 +3,8 @@ package com.example
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.engine.LinkType
+import com.example.engine.MultiPlatformVideoResolver
+import com.example.engine.SupportedPlatform
 import com.example.engine.TelegramLinkParser
 import com.example.engine.TelegramVideoDownloaderEngine
 import org.junit.Assert.assertEquals
@@ -20,7 +22,7 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("TG Video Downloader", appName)
+    assertEquals("VIP Video Downloader", appName)
   }
 
   @Test
@@ -34,6 +36,15 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `detect multi platforms accurately`() {
+    assertEquals(SupportedPlatform.YOUTUBE, MultiPlatformVideoResolver.detectPlatform("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+    assertEquals(SupportedPlatform.FACEBOOK, MultiPlatformVideoResolver.detectPlatform("https://www.facebook.com/reel/12345678"))
+    assertEquals(SupportedPlatform.INSTAGRAM, MultiPlatformVideoResolver.detectPlatform("https://www.instagram.com/reel/Cx12345/"))
+    assertEquals(SupportedPlatform.GOOGLE_DRIVE, MultiPlatformVideoResolver.detectPlatform("https://drive.google.com/file/d/1a2b3c4d/view"))
+    assertEquals(SupportedPlatform.TELEGRAM, MultiPlatformVideoResolver.detectPlatform("https://t.me/c/12345/67"))
+  }
+
+  @Test
   fun `format bytes for small and big videos`() {
     val small = TelegramVideoDownloaderEngine.formatBytes(5_500_000L)
     val big = TelegramVideoDownloaderEngine.formatBytes(1_200_000_000L)
@@ -41,4 +52,5 @@ class ExampleRobolectricTest {
     assertTrue(big.contains("GB"))
   }
 }
+
 

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "TG Video Downloader"
+rootProject.name = "VIP Video Downloader"
 
 include(":app")

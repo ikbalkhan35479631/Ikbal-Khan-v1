@@ -49,13 +49,7 @@ class PrivateChannelHelper(context: Context) {
             return "$bridge/download?url=${java.net.URLEncoder.encode(parsedLink.originalUrl, "UTF-8")}"
         }
 
-        // If user configured Telegram Bot Token and it's a private or public post:
-        if (settings.botToken.isNotBlank()) {
-            // Can route via Telegram Bot file stream gateway
-            return "https://api.telegram.org/bot${settings.botToken.trim()}/getFileStream?chat=${parsedLink.channelIdentifier}&msg=${parsedLink.messageId}"
-        }
-
-        // Default or Fallback: return the original url (or stream endpoint)
+        // Default or Fallback: return the original url
         return parsedLink.originalUrl
     }
 }

@@ -164,8 +164,63 @@ fun PrivateGuideTab(
 
                 GuideStepItem(
                     stepNumber = "৩",
-                    title = "বট টোকেন বা সেশন সংযোগ (ঐচ্ছিক)",
-                    desc = "যদি চ্যানেলটি অত্যন্ত সুরক্ষিত হয়, আপনার নিজস্ব টেলিগ্রাম বট বানিয়ে চ্যানেলে অ্যাড করুন এবং নিচের বক্সে Bot Token দিন।"
+                    title = "বট দিয়ে প্রাইভেট চ্যানেল ডাউনলোডের সঠিক নিয়ম",
+                    desc = "শুধুমাত্র Bot Token বসালেই প্রাইভেট চ্যানেলের ভিডিও পাওয়া যায় না! আপনার বটকে প্রথমে ঐ প্রাইভেট চ্যানেলে 'Administrator' হিসেবে অ্যাড করতে হবে। অন্যথায় টেলিগ্রাম বটকে চ্যানেলের মেসেজ পড়ার অনুমতি দেয় না।"
+                )
+
+                GuideStepItem(
+                    stepNumber = "৪",
+                    title = "সরাসরি ফাইল লিঙ্ক বা ফরওয়ার্ড লিঙ্ক",
+                    desc = "চ্যানেলের পোস্ট থেকে বটের মাধ্যমে লিঙ্ক নিলে (যেমন https://api.telegram.org/file/bot... অথবা সরাসরি স্ট্রিমিং লিঙ্ক) ডাউনলোডার হাই-স্পিডে ডাউনলোড করে সরাসরি ফোনে সেভ করবে।"
+                )
+            }
+        }
+
+        // VIP Multi-Platform Guide Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.SmartToy,
+                        contentDescription = null,
+                        tint = com.example.ui.theme.VipGold,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "👑 VIP মাল্টি-প্ল্যাটফর্ম ও ১০+ ব্যাচ গাইড",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = com.example.ui.theme.VipGold
+                    )
+                }
+
+                GuideStepItem(
+                    stepNumber = "A",
+                    title = "YouTube, Facebook ও Instagram ডাউনলোড",
+                    desc = "যেকোনো YouTube ভিডিও/Shorts, Facebook রিল অথবা Instagram পোস্টের লিঙ্ক কপি করে পেস্ট করুন। কোয়ালিটি ড্রপডাউন থেকে 4K, 1080p, 720p বা MP3 নির্বাচন করে ডাউনলোড করতে পারবেন।"
+                )
+
+                GuideStepItem(
+                    stepNumber = "B",
+                    title = "Google Drive ও ক্লাউড ভিডিও",
+                    desc = "Google Drive বা Google ক্লাউড স্টোরেজের যেকোনো পাবলিক বা শেয়ার্ড ভিডিও সরাসরি হাই-স্পিড এক্সপোর্ট স্ট্রিমে ডাউনলোড করা যায়।"
+                )
+
+                GuideStepItem(
+                    stepNumber = "C",
+                    title = "একসাথে ১০+ ভিডিও ডাউনলোড (Batch Mode)",
+                    desc = "'১০+ একসাথে (10+ Batch)' মোড সিলেক্ট করে একাধিক ভিডিও লিঙ্ক প্রতি লাইনে একটি করে পেস্ট করুন। এক ক্লিকে সবগুলো একসাথে প্যারালালে ডাউনলোড হবে।"
                 )
             }
         }

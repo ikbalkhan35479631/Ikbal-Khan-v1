@@ -14,12 +14,14 @@ import com.example.data.AppDatabase
 import com.example.data.DownloadItem
 import com.example.data.DownloadRepository
 import com.example.data.DownloadStatus
-import com.example.engine.LinkType
-import com.example.engine.ParsedLink
+import com.example.engine.MultiPlatformVideoResolver
+import com.example.engine.PlatformAnalysis
 import com.example.engine.PrivateChannelHelper
 import com.example.engine.PrivateSettings
+import com.example.engine.SupportedPlatform
 import com.example.engine.TelegramLinkParser
 import com.example.engine.TelegramVideoDownloaderEngine
+import com.example.engine.VideoQuality
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +35,8 @@ data class SampleLink(
     val sizeText: String,
     val badge: String,
     val url: String,
+    val platform: SupportedPlatform = SupportedPlatform.WEB_DIRECT,
+    val quality: String = "1080p HD",
     val isPrivateDemo: Boolean = false
 )
 
@@ -54,14 +58,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _urlInput = MutableStateFlow("")
     val urlInput: StateFlow<String> = _urlInput.asStateFlow()
 
-    private val _parsedLink = MutableStateFlow<ParsedLink?>(null)
-    val parsedLink: StateFlow<ParsedLink?> = _parsedLink.asStateFlow()
+    private val _platformAnalysis = MutableStateFlow<PlatformAnalysis?>(null)
+    val platformAnalysis: StateFlow<PlatformAnalysis?> = _platformAnalysis.asStateFlow()
+
+    private val _selectedPlatform = MutableStateFlow(SupportedPlatform.ALL)
+    val selectedPlatform: StateFlow<SupportedPlatform> = _selectedPlatform.asStateFlow()
+
+    private val _selectedQuality = MutableStateFlow(VideoQuality.RES_1080P)
+    val selectedQuality: StateFlow<VideoQuality> = _selectedQuality.asStateFlow()
 
     private val _customTitle = MutableStateFlow("")
     val customTitle: StateFlow<String> = _customTitle.asStateFlow()
 
     private val _multiThreaded = MutableStateFlow(true)
     val multiThreaded: StateFlow<Boolean> = _multiThreaded.asStateFlow()
+
+    // Batch download state (10+ videos simultaneously)
+    private val _isBatchMode = MutableStateFlow(false)
+    val isBatchMode: StateFlow<Boolean> = _isBatchMode.asStateFlow()
+
+    private val _batchUrlsInput = MutableStateFlow("")
+    val batchUrlsInput: StateFlow<String> = _batchUrlsInput.asStateFlow()
+
+    private val _isResolving = MutableStateFlow(false)
+    val isResolving: StateFlow<Boolean> = _isResolving.asStateFlow()
+
+    private val _resolvingMessage = MutableStateFlow("")
+    val resolvingMessage: StateFlow<String> = _resolvingMessage.asStateFlow()
 
     private val _privateSettings = MutableStateFlow(privateHelper.getSettings())
     val privateSettings: StateFlow<PrivateSettings> = _privateSettings.asStateFlow()
@@ -72,48 +95,111 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
+    // Curated high quality multi-platform sample videos
     val sampleLinks = listOf(
         SampleLink(
-            title = "Small Video (For Quick Test)",
-            sizeText = "5.6 MB",
-            badge = "Small Video",
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-        ),
-        SampleLink(
-            title = "Medium Video (HD 720p)",
+            title = "Big Buck Bunny (1080p Full HD)",
             sizeText = "24.8 MB",
-            badge = "Medium Video",
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            badge = "1080p FHD",
+            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            platform = SupportedPlatform.WEB_DIRECT,
+            quality = "1080p HD"
         ),
         SampleLink(
-            title = "Big Video (Full HD 1080p Stream)",
+            title = "Tears of Steel (4K Ultra Stream)",
             sizeText = "158 MB",
-            badge = "Big Video",
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            badge = "4K Cinema",
+            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+            platform = SupportedPlatform.WEB_DIRECT,
+            quality = "4K UHD"
         ),
         SampleLink(
-            title = "Telegram Private Link (Format Demo)",
+            title = "Sintel Fantasy Film (1080p High Speed)",
+            sizeText = "32.4 MB",
+            badge = "1080p FHD",
+            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+            platform = SupportedPlatform.WEB_DIRECT,
+            quality = "1080p HD"
+        ),
+        SampleLink(
+            title = "For Bigger Blazes (Fast Action HD)",
+            sizeText = "5.6 MB",
+            badge = "Quick HD",
+            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            platform = SupportedPlatform.WEB_DIRECT,
+            quality = "720p HD"
+        ),
+        SampleLink(
+            title = "Telegram Private Channel Demo (Protected)",
             sizeText = "Private",
-            badge = "Private Channel",
+            badge = "TG Private",
             url = "https://t.me/c/1839201948/425",
+            platform = SupportedPlatform.TELEGRAM,
+            quality = "Original",
             isPrivateDemo = true
+        ),
+        SampleLink(
+            title = "Telegram Public Channel Demo",
+            sizeText = "Public",
+            badge = "TG Public",
+            url = "https://t.me/durov/192",
+            platform = SupportedPlatform.TELEGRAM,
+            quality = "Original"
         )
+    )
+
+    // 10 high-speed videos ready for simultaneous 10+ batch testing
+    val batchSampleUrls = listOf(
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackSeeTheWorld.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
     )
 
     fun onTabSelected(tabIndex: Int) {
         _selectedTab.value = tabIndex
     }
 
+    fun onPlatformFilterChanged(platform: SupportedPlatform) {
+        _selectedPlatform.value = platform
+    }
+
+    fun onQualityChanged(quality: VideoQuality) {
+        _selectedQuality.value = quality
+    }
+
+    fun toggleBatchMode(enabled: Boolean) {
+        _isBatchMode.value = enabled
+    }
+
+    fun onBatchUrlsChanged(newText: String) {
+        _batchUrlsInput.value = newText
+    }
+
+    fun load10SampleBatch() {
+        _batchUrlsInput.value = batchSampleUrls.joinToString("\n")
+    }
+
     fun onUrlChanged(newUrl: String) {
         _urlInput.value = newUrl
         if (newUrl.isNotBlank()) {
-            val parsed = TelegramLinkParser.parse(newUrl)
-            _parsedLink.value = parsed
-            if (_customTitle.value.isBlank() || _customTitle.value.startsWith("Telegram_") || _customTitle.value.startsWith("TG_")) {
-                _customTitle.value = parsed.suggestedTitle
+            val analysis = MultiPlatformVideoResolver.analyzeUrl(newUrl)
+            _platformAnalysis.value = analysis
+            _selectedPlatform.value = analysis.platform
+            if (_customTitle.value.isBlank() || _customTitle.value.startsWith("Telegram_") ||
+                _customTitle.value.startsWith("TG_") || _customTitle.value.startsWith("YouTube_") ||
+                _customTitle.value.startsWith("Facebook_") || _customTitle.value.startsWith("Instagram_")
+            ) {
+                _customTitle.value = analysis.suggestedTitle
             }
         } else {
-            _parsedLink.value = null
+            _platformAnalysis.value = null
         }
     }
 
@@ -131,7 +217,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (clipData != null && clipData.itemCount > 0) {
             val pasted = clipData.getItemAt(0).text?.toString() ?: ""
             if (pasted.isNotBlank()) {
-                onUrlChanged(pasted)
+                if (_isBatchMode.value) {
+                    val current = _batchUrlsInput.value
+                    _batchUrlsInput.value = if (current.isBlank()) pasted else "$current\n$pasted"
+                } else {
+                    onUrlChanged(pasted)
+                }
                 Toast.makeText(context, "Link pasted!", Toast.LENGTH_SHORT).show()
             }
         }
@@ -139,60 +230,146 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearInput() {
         _urlInput.value = ""
-        _parsedLink.value = null
+        _platformAnalysis.value = null
         _customTitle.value = ""
+    }
+
+    fun clearBatchInput() {
+        _batchUrlsInput.value = ""
     }
 
     fun loadSample(sample: SampleLink) {
         onUrlChanged(sample.url)
-        _customTitle.value = sample.title.replace(" ", "_") + ".mp4"
+        _customTitle.value = sample.title.replace(" ", "_").replace("(", "").replace(")", "") + ".mp4"
     }
 
     fun startDownload(context: Context) {
         val rawUrl = _urlInput.value.trim()
         if (rawUrl.isBlank()) {
-            Toast.makeText(context, "Please enter or paste a Telegram link", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "ভিডিও লিঙ্ক দিন (Please enter a video link)", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val parsed = _parsedLink.value ?: TelegramLinkParser.parse(rawUrl)
-        val resolvedUrl = privateHelper.resolveDownloadUrl(parsed)
-
-        val storageDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
-        val safeTitle = if (_customTitle.value.isNotBlank()) {
-            _customTitle.value.trim()
-        } else {
-            parsed.suggestedTitle
-        }
-
-        val fileName = if (safeTitle.endsWith(".mp4") || safeTitle.endsWith(".mkv") || safeTitle.endsWith(".webm")) {
-            safeTitle
-        } else {
-            "$safeTitle.mp4"
-        }
-
-        val destinationFile = File(storageDir, "${System.currentTimeMillis()}_$fileName")
+        val analysis = _platformAnalysis.value ?: MultiPlatformVideoResolver.analyzeUrl(rawUrl)
 
         viewModelScope.launch {
-            val downloadItem = DownloadItem(
-                title = safeTitle,
-                originalUrl = rawUrl,
-                downloadUrl = resolvedUrl,
-                filePath = destinationFile.absolutePath,
-                isPrivateChannel = parsed.isPrivate,
-                channelInfo = parsed.channelIdentifier,
-                messageId = parsed.messageId,
-                multiThreaded = _multiThreaded.value,
-                status = DownloadStatus.QUEUED
-            )
+            _isResolving.value = true
+            _resolvingMessage.value = "হাই-কোয়ালিটি স্ট্রিম লিঙ্ক প্রস্তুত করা হচ্ছে..."
 
-            val newId = repository.insert(downloadItem)
-            downloaderEngine.startOrResumeDownload(newId)
+            try {
+                val resolvedUrl: String
+                if (analysis.platform == SupportedPlatform.TELEGRAM) {
+                    val tgParsed = TelegramLinkParser.parse(rawUrl)
+                    resolvedUrl = privateHelper.resolveDownloadUrl(tgParsed)
+                } else {
+                    resolvedUrl = MultiPlatformVideoResolver.resolveStreamUrl(
+                        rawUrl,
+                        analysis.platform,
+                        _selectedQuality.value
+                    )
+                }
 
-            Toast.makeText(context, "Download started: $safeTitle", Toast.LENGTH_SHORT).show()
-            // Switch to Active Downloads tab to show live progress
+                val storageDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+                val safeTitle = if (_customTitle.value.isNotBlank()) {
+                    _customTitle.value.trim()
+                } else {
+                    analysis.suggestedTitle
+                }
+
+                val ext = if (_selectedQuality.value == VideoQuality.AUDIO_MP3) ".mp3" else ".mp4"
+                val baseClean = safeTitle.removeSuffix(".mp4").removeSuffix(".mkv").removeSuffix(".webm").removeSuffix(".mp3")
+                val fileName = "$baseClean$ext"
+
+                val destinationFile = File(storageDir, "${System.currentTimeMillis()}_$fileName")
+
+                val downloadItem = DownloadItem(
+                    title = fileName,
+                    originalUrl = rawUrl,
+                    downloadUrl = resolvedUrl,
+                    filePath = destinationFile.absolutePath,
+                    isPrivateChannel = analysis.isPrivateTelegram,
+                    channelInfo = analysis.channelInfo,
+                    messageId = analysis.messageId,
+                    multiThreaded = _multiThreaded.value,
+                    mimeType = if (_selectedQuality.value == VideoQuality.AUDIO_MP3) "audio/mpeg" else "video/mp4",
+                    status = DownloadStatus.QUEUED
+                )
+
+                val newId = repository.insert(downloadItem)
+                downloaderEngine.startOrResumeDownload(newId)
+
+                Toast.makeText(context, "ডাউনলোড শুরু হয়েছে: $fileName", Toast.LENGTH_SHORT).show()
+                _selectedTab.value = 1
+                clearInput()
+            } catch (e: Exception) {
+                Toast.makeText(context, "ত্রুটি: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                _isResolving.value = false
+            }
+        }
+    }
+
+    /**
+     * Downloads 10+ videos simultaneously in batch mode
+     */
+    fun startBatchDownload(context: Context) {
+        val lines = _batchUrlsInput.value.lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        if (lines.isEmpty()) {
+            Toast.makeText(context, "কমপক্ষে ১টি বা ততোধিক লিঙ্ক দিন", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        viewModelScope.launch {
+            _isResolving.value = true
+            _resolvingMessage.value = "${lines.size}টি ভিডিও লিঙ্ক প্রস্তুত করা হচ্ছে..."
+
+            val storageDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+            var addedCount = 0
+
+            lines.forEachIndexed { index, rawUrl ->
+                try {
+                    val analysis = MultiPlatformVideoResolver.analyzeUrl(rawUrl)
+                    val resolvedUrl = if (analysis.platform == SupportedPlatform.TELEGRAM) {
+                        val tgParsed = TelegramLinkParser.parse(rawUrl)
+                        privateHelper.resolveDownloadUrl(tgParsed)
+                    } else {
+                        MultiPlatformVideoResolver.resolveStreamUrl(rawUrl, analysis.platform, _selectedQuality.value)
+                    }
+
+                    val ext = if (_selectedQuality.value == VideoQuality.AUDIO_MP3) ".mp3" else ".mp4"
+                    val baseName = analysis.suggestedTitle.removeSuffix(".mp4").removeSuffix(".mp3")
+                    val fileName = "${baseName}_#${index + 1}$ext"
+                    val destFile = File(storageDir, "${System.currentTimeMillis()}_${index}_$fileName")
+
+                    val downloadItem = DownloadItem(
+                        title = fileName,
+                        originalUrl = rawUrl,
+                        downloadUrl = resolvedUrl,
+                        filePath = destFile.absolutePath,
+                        isPrivateChannel = analysis.isPrivateTelegram,
+                        channelInfo = analysis.channelInfo,
+                        messageId = analysis.messageId,
+                        multiThreaded = _multiThreaded.value,
+                        mimeType = if (_selectedQuality.value == VideoQuality.AUDIO_MP3) "audio/mpeg" else "video/mp4",
+                        status = DownloadStatus.QUEUED
+                    )
+
+                    val newId = repository.insert(downloadItem)
+                    // Start concurrent download on IO pool
+                    downloaderEngine.startOrResumeDownload(newId)
+                    addedCount++
+                } catch (e: Exception) {
+                    // Continue with other links
+                }
+            }
+
+            _isResolving.value = false
+            Toast.makeText(context, "$addedCount টি ভিডিও একসাথে ডাউনলোড শুরু হয়েছে!", Toast.LENGTH_LONG).show()
             _selectedTab.value = 1
-            clearInput()
+            clearBatchInput()
         }
     }
 
@@ -214,10 +391,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resumeAll() {
         viewModelScope.launch {
-            val active = repository.activeDownloads
-            // Start all queued or paused items
             activeDownloads.value.forEach { item ->
-                if (item.status == DownloadStatus.PAUSED || item.status == DownloadStatus.QUEUED) {
+                if (item.status == DownloadStatus.PAUSED || item.status == DownloadStatus.QUEUED || item.status == DownloadStatus.FAILED) {
                     downloaderEngine.startOrResumeDownload(item.id)
                 }
             }
@@ -233,21 +408,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Ignore file delete exception
             }
             repository.delete(item)
-            Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun exportToGallery(item: DownloadItem, context: Context) {
         val file = File(item.filePath)
         if (!file.exists()) {
-            Toast.makeText(context, "File does not exist on disk", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "ফাইলটি স্টোরেজে পাওয়া যায়নি!", Toast.LENGTH_SHORT).show()
             return
         }
-        val success = TelegramVideoDownloaderEngine.exportToGallery(context, file, item.title)
+        val (success, message) = TelegramVideoDownloaderEngine.exportToGallery(context, file, item.title)
         if (success) {
-            Toast.makeText(context, "Saved to Gallery / Movies folder!", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "সফলভাবে গ্যালারিতে সেভ হয়েছে! (Movies/TelegramDownloads)", Toast.LENGTH_LONG).show()
         } else {
-            Toast.makeText(context, "Could not save to gallery", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "সেভ করা যায়নি: $message", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -264,7 +439,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 file
             )
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "video/*"
+                type = item.mimeType
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }

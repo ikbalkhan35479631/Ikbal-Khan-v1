@@ -49,8 +49,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DownloadItem
 import com.example.engine.TelegramVideoDownloaderEngine
+import com.example.engine.MultiPlatformVideoResolver
 import com.example.ui.theme.TelegramAccent
 import com.example.ui.theme.TelegramBlue
+import com.example.ui.theme.VipGold
+import com.example.ui.theme.VipGoldBorder
 import com.example.ui.theme.WarningAmber
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -85,7 +88,7 @@ fun SavedVideosTab(
                     Icon(
                         imageVector = Icons.Default.Movie,
                         contentDescription = "No Saved Videos",
-                        tint = TelegramBlue,
+                        tint = VipGold,
                         modifier = Modifier.size(44.dp)
                     )
                 }
@@ -181,18 +184,20 @@ fun SavedVideoCard(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(TelegramBlue.copy(alpha = 0.15f)),
+                        .background(VipGold.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Play Video",
-                        tint = TelegramBlue,
+                        tint = VipGold,
                         modifier = Modifier.size(32.dp)
                     )
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
+
+                val platform = MultiPlatformVideoResolver.detectPlatform(item.originalUrl)
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -209,11 +214,25 @@ fun SavedVideoCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(platform.colorHex).copy(alpha = 0.2f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = platform.displayName,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(platform.colorHex)
+                            )
+                        }
+
                         Text(
                             text = TelegramVideoDownloaderEngine.formatBytes(item.totalBytes),
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = TelegramBlue
+                            color = VipGold
                         )
 
                         Text(
