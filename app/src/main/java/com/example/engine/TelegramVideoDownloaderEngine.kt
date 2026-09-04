@@ -199,8 +199,16 @@ class TelegramVideoDownloaderEngine(
             }
         }
 
+        val cleanPath = targetUrl.substringBefore("?").lowercase()
+        val isDirectFile = cleanPath.endsWith(".apk") || cleanPath.endsWith(".zip") ||
+                cleanPath.endsWith(".pdf") || cleanPath.endsWith(".rar") ||
+                cleanPath.endsWith(".mp3") || cleanPath.endsWith(".mp4") ||
+                cleanPath.endsWith(".mkv") || cleanPath.endsWith(".webm") ||
+                cleanPath.endsWith(".bin") || cleanPath.endsWith(".iso") ||
+                cleanPath.endsWith(".tar") || cleanPath.endsWith(".gz")
+
         // 3. Check for unconverted web video page URLs and attempt auto-resolution
-        if (MultiPlatformVideoResolver.isWebPageUrl(targetUrl)) {
+        if (!isDirectFile && MultiPlatformVideoResolver.isWebPageUrl(targetUrl)) {
             try {
                 val analysis = MultiPlatformVideoResolver.analyzeUrl(item.originalUrl)
                 val resolved = MultiPlatformVideoResolver.resolveStreamUrl(
@@ -528,27 +536,48 @@ class TelegramVideoDownloaderEngine(
                 }
 
                 val relativeFolder = when {
-                    isVideo -> Environment.DIRECTORY_MOVIES + "/VIPDownloads"
-                    isAudio -> Environment.DIRECTORY_MUSIC + "/VIPDownloads"
-                    else -> Environment.DIRECTORY_DOWNLOADS + "/VIPDownloads"
-                }
-
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.TITLE, safeTitle)
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, cleanFileName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                    put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.MediaColumns.RELATIVE_PATH, relativeFolder)
-                        put(MediaStore.MediaColumns.IS_PENDING, 1)
-                    }
+                    isVideo -> "Movies/VIPDownloads/"
+                    isAudio -> "Music/VIPDownloads/"
+                    else -> "Download/VIPDownloads/"
                 }
 
                 var uri: Uri? = null
+
+                // 1. Attempt standard MediaStore insert
                 try {
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.TITLE, safeTitle)
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, cleanFileName)
+                        put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                        put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, relativeFolder)
+                            put(MediaStore.MediaColumns.IS_PENDING, 1)
+                        }
+                    }
                     uri = resolver.insert(targetCollectionUri, contentValues)
                 } catch (e: Exception) {
-                    Log.w("DownloaderEngine", "MediaStore insert exception: ${e.message}")
+                    Log.w("DownloaderEngine", "MediaStore insert attempt 1 failed: ${e.message}")
+                }
+
+                // 2. Retry without subfolder if OEM device rejected custom subfolder
+                if (uri == null) {
+                    try {
+                        val uniqueName = "${System.currentTimeMillis()}_$cleanFileName"
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.TITLE, safeTitle)
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, uniqueName)
+                            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                            put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                put(MediaStore.MediaColumns.RELATIVE_PATH, if (isVideo) "Movies/" else "Download/")
+                                put(MediaStore.MediaColumns.IS_PENDING, 1)
+                            }
+                        }
+                        uri = resolver.insert(targetCollectionUri, contentValues)
+                    } catch (e2: Exception) {
+                        Log.w("DownloaderEngine", "MediaStore insert attempt 2 failed: ${e2.message}")
+                    }
                 }
 
                 if (uri != null) {
@@ -576,17 +605,19 @@ class TelegramVideoDownloaderEngine(
                         // non-fatal
                     }
 
-                    val destinationLabel = if (isVideo) "গ্যালারি (Movies/VIPDownloads)" else "ডাউনলোডস ফোল্ডার ($relativeFolder)"
-                    Pair(true, "সেভ হয়েছে: $destinationLabel (${formatBytes(bytesCopied)})")
+                    val destinationLabel = if (isVideo) "গ্যালারি (Movies)" else "ডাউনলোডস (Download)"
+                    Pair(true, "গ্যালারিতে সফলভাবে সেভ হয়েছে! ($destinationLabel)")
                 } else {
-                    // Fallback to public folder
-                    val publicDir = when {
-                        isVideo -> File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "VIPDownloads")
-                        isAudio -> File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "VIPDownloads")
-                        else -> File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "VIPDownloads")
+                    // Safe fallback using app-accessible external media folder
+                    val fallbackDir = if (isVideo) {
+                        context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+                    } else {
+                        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
                     }
-                    publicDir.mkdirs()
-                    val targetPublicFile = File(publicDir, cleanFileName)
+                    if (!fallbackDir.exists()) {
+                        fallbackDir.mkdirs()
+                    }
+                    val targetPublicFile = File(fallbackDir, cleanFileName)
                     sourceFile.copyTo(targetPublicFile, overwrite = true)
 
                     try {
@@ -600,7 +631,7 @@ class TelegramVideoDownloaderEngine(
                         // non-fatal
                     }
 
-                    Pair(true, "সেভ হয়েছে: ${targetPublicFile.parent} (${formatBytes(targetPublicFile.length())})")
+                    Pair(true, "গ্যালারি ও ডিভাইসে সংরক্ষিত হয়েছে! (${formatBytes(targetPublicFile.length())})")
                 }
             } catch (e: Exception) {
                 Log.e("DownloaderEngine", "Failed to export file", e)

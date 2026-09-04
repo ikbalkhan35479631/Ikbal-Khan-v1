@@ -101,7 +101,7 @@ import com.example.ui.theme.ZipOrange
 @Composable
 fun DownloaderTab(
     viewModel: MainViewModel,
-    onOpenGuide: () -> Unit,
+    onOpenGuide: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -596,10 +596,10 @@ fun DownloaderTab(
                         )
                     )
 
-                    // Paste & Guide Buttons
+                    // Paste Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
@@ -621,25 +621,6 @@ fun DownloaderTab(
                                 "Paste Link",
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { onOpenGuide() }
-                        ) {
-                            Icon(
-                                Icons.Default.HelpOutline,
-                                contentDescription = "Help",
-                                tint = TelegramBlue,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "Private Guide",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TelegramBlue,
-                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }

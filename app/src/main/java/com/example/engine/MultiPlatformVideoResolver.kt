@@ -276,20 +276,32 @@ object MultiPlatformVideoResolver {
             }
         }
 
-        // 4. For YouTube & YouTube Shorts: Try Piped API first, then Invidious instances
+        // 4. For YouTube & YouTube Shorts: Multi-Engine Resolution
         if (platform == SupportedPlatform.YOUTUBE) {
             val videoId = extractYouTubeId(trimmed)
             if (videoId.isNotBlank()) {
-                // First try Piped API (high reliability for YouTube Shorts & Videos)
+                // First try YouTube Innertube Direct API
+                val innertubeStream = tryYouTubeInnertube(videoId, quality)
+                if (!innertubeStream.isNullOrBlank()) {
+                    return@withContext innertubeStream
+                }
+
+                // Second try Invidious public streaming instances
+                val invidiousStream = tryInvidiousStream(videoId, quality)
+                if (!invidiousStream.isNullOrBlank()) {
+                    return@withContext invidiousStream
+                }
+
+                // Third try Piped API
                 val pipedStream = tryPipedStream(videoId, quality)
                 if (!pipedStream.isNullOrBlank()) {
                     return@withContext pipedStream
                 }
 
-                // Next try Invidious public streaming instances
-                val invidiousStream = tryInvidiousStream(videoId, quality)
-                if (!invidiousStream.isNullOrBlank()) {
-                    return@withContext invidiousStream
+                // Fourth try VKR Downloader
+                val vkrStream = tryVKRDownloader(trimmed)
+                if (!vkrStream.isNullOrBlank()) {
+                    return@withContext vkrStream
                 }
             }
         }
@@ -298,6 +310,12 @@ object MultiPlatformVideoResolver {
         val cobaltStream = tryCobaltExtractor(trimmed, quality)
         if (!cobaltStream.isNullOrBlank()) {
             return@withContext cobaltStream
+        }
+
+        // 6. Generic Video Downloader fallback
+        val vkrFallback = tryVKRDownloader(trimmed)
+        if (!vkrFallback.isNullOrBlank()) {
+            return@withContext vkrFallback
         }
 
         // 6. If it's a webpage URL and could not be resolved, throw explicit error
@@ -309,6 +327,134 @@ object MultiPlatformVideoResolver {
 
         // Fallback
         return@withContext trimmed
+    }
+
+    private fun tryYouTubeInnertube(videoId: String, quality: VideoQuality): String? {
+        val clientTypes = listOf(
+            // Android official client
+            JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "ANDROID")
+                        put("clientVersion", "19.09.37")
+                        put("androidSdkVersion", 30)
+                        put("hl", "en")
+                        put("gl", "US")
+                    })
+                })
+                put("videoId", videoId)
+            },
+            // iOS official client
+            JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "IOS")
+                        put("clientVersion", "19.09.3")
+                        put("deviceModel", "iPhone14,3")
+                        put("hl", "en")
+                        put("gl", "US")
+                    })
+                })
+                put("videoId", videoId)
+            }
+        )
+
+        for (clientJson in clientTypes) {
+            try {
+                val reqBody = clientJson.toString().toRequestBody("application/json".toMediaType())
+                val request = Request.Builder()
+                    .url("https://www.youtube.com/youtubei/v1/player")
+                    .header("User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip")
+                    .header("Content-Type", "application/json")
+                    .header("X-YouTube-Client-Name", "3")
+                    .header("X-YouTube-Client-Version", "19.09.37")
+                    .post(reqBody)
+                    .build()
+
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val body = response.body?.string() ?: return@use
+                    val json = JSONObject(body)
+                    val streamingData = json.optJSONObject("streamingData") ?: return@use
+
+                    if (quality == VideoQuality.AUDIO_MP3) {
+                        val adaptive = streamingData.optJSONArray("adaptiveFormats")
+                        if (adaptive != null) {
+                            for (i in 0 until adaptive.length()) {
+                                val item = adaptive.getJSONObject(i)
+                                val mimeType = item.optString("mimeType")
+                                val streamUrl = item.optString("url")
+                                if (mimeType.contains("audio") && streamUrl.startsWith("http")) {
+                                    return streamUrl
+                                }
+                            }
+                        }
+                    }
+
+                    val formats = streamingData.optJSONArray("formats")
+                    if (formats != null && formats.length() > 0) {
+                        var candidate: String? = null
+                        for (i in 0 until formats.length()) {
+                            val item = formats.getJSONObject(i)
+                            val streamUrl = item.optString("url")
+                            val qualityLabel = item.optString("qualityLabel")
+                            if (streamUrl.startsWith("http")) {
+                                if (candidate == null) candidate = streamUrl
+                                if (qualityLabel.contains(quality.resolution)) {
+                                    return streamUrl
+                                }
+                            }
+                        }
+                        if (candidate != null) return candidate
+                    }
+
+                    val adaptive = streamingData.optJSONArray("adaptiveFormats")
+                    if (adaptive != null) {
+                        for (i in 0 until adaptive.length()) {
+                            val item = adaptive.getJSONObject(i)
+                            val mimeType = item.optString("mimeType")
+                            val streamUrl = item.optString("url")
+                            if (mimeType.contains("video/mp4") && streamUrl.startsWith("http")) {
+                                return streamUrl
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d("MultiPlatformResolver", "Innertube player API error: ${e.message}")
+            }
+        }
+        return null
+    }
+
+    private fun tryVKRDownloader(url: String): String? {
+        try {
+            val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+            val request = Request.Builder()
+                .url("https://api.vkrdownloader.com/server?v=$encoded")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body?.string() ?: return null
+                val json = JSONObject(body)
+                val data = json.optJSONObject("data") ?: return null
+                val dlUrl = data.optString("downloadUrl")
+                if (dlUrl.startsWith("http")) return dlUrl
+                val downloads = data.optJSONArray("downloads")
+                if (downloads != null && downloads.length() > 0) {
+                    for (i in 0 until downloads.length()) {
+                        val dItem = downloads.getJSONObject(i)
+                        val u = dItem.optString("url")
+                        if (u.startsWith("http")) return u
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.d("MultiPlatformResolver", "VKR Downloader error: ${e.message}")
+        }
+        return null
     }
 
     private fun tryPipedStream(videoId: String, quality: VideoQuality): String? {

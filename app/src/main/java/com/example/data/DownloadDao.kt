@@ -42,4 +42,10 @@ interface DownloadDao {
 
     @Query("UPDATE download_items SET downloadedBytes = :downloaded, totalBytes = :total, speedText = :speed, etaSeconds = :eta WHERE id = :id")
     suspend fun updateProgress(id: Long, downloaded: Long, total: Long, speed: String, eta: Long)
+
+    @Query("UPDATE download_items SET isLocked = :isLocked WHERE id = :id")
+    suspend fun updateLockStatus(id: Long, isLocked: Boolean)
+
+    @Query("SELECT * FROM download_items WHERE isLocked = 1 ORDER BY createdAt DESC")
+    fun getLockedDownloads(): Flow<List<DownloadItem>>
 }

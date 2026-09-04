@@ -69,6 +69,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val completedDownloads: StateFlow<List<DownloadItem>> = repository.completedDownloads
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val lockedDownloads: StateFlow<List<DownloadItem>> = repository.lockedDownloads
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val vaultSecurityManager = com.example.engine.VaultSecurityManager(application)
+    private val _isVaultUnlocked = MutableStateFlow(false)
+    val isVaultUnlocked: StateFlow<Boolean> = _isVaultUnlocked.asStateFlow()
+
+    fun hasVaultPin(): Boolean = vaultSecurityManager.hasPin()
+
+    fun setVaultPin(pin: String): Boolean {
+        val success = vaultSecurityManager.setPin(pin)
+        if (success) {
+            _isVaultUnlocked.value = true
+        }
+        return success
+    }
+
+    fun verifyVaultPin(pin: String): Boolean {
+        val ok = vaultSecurityManager.verifyPin(pin)
+        if (ok) {
+            _isVaultUnlocked.value = true
+        }
+        return ok
+    }
+
+    fun changeVaultPin(oldPin: String, newPin: String): Boolean {
+        return vaultSecurityManager.changePin(oldPin, newPin)
+    }
+
+    fun lockVault() {
+        _isVaultUnlocked.value = false
+    }
+
+    fun toggleLockVideo(item: DownloadItem, isLocked: Boolean, context: Context) {
+        viewModelScope.launch {
+            repository.updateLockStatus(item.id, isLocked)
+            val msg = if (isLocked) "ভিডিওটি গোপন ভল্টে সুরক্ষিত করা হয়েছে!" else "ভিডিওটি ভল্ট থেকে সাধারণ তালিকায় সরানো হয়েছে!"
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Network Connectivity State
     private val _isOnline = MutableStateFlow(true)
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()

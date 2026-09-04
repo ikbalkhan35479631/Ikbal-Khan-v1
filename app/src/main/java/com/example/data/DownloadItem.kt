@@ -32,6 +32,7 @@ data class DownloadItem(
     val mimeType: String = "video/mp4",
     val multiThreaded: Boolean = true,
     val errorMessage: String? = null,
+    val isLocked: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null
 )

@@ -54,9 +54,9 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.ActiveQueueTab
 import com.example.ui.DownloaderTab
 import com.example.ui.MainViewModel
-import com.example.ui.PrivateGuideTab
+import com.example.ui.PrivateVaultTab
+import com.example.ui.ProVideoPlayerDialog
 import com.example.ui.SavedVideosTab
-import com.example.ui.VideoPlayerDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.TelegramBlue
 import com.example.ui.theme.VipAmber
@@ -241,20 +241,20 @@ fun MainScreen(viewModel: MainViewModel) {
                     modifier = Modifier.testTag("nav_saved_tab")
                 )
 
-                // Tab 3: Private Guide & Settings
+                // Tab 3: Private Vault & Lock
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { viewModel.onTabSelected(3) },
                     icon = {
-                        Icon(Icons.Default.Lock, contentDescription = "Private Guide")
+                        Icon(Icons.Default.Lock, contentDescription = "Private Vault")
                     },
-                    label = { Text("প্রাইভেট গাইড", fontSize = 11.sp) },
+                    label = { Text("গোপন ভল্ট", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = VipGold,
                         selectedTextColor = VipGold,
                         indicatorColor = VipGold.copy(alpha = 0.15f)
                     ),
-                    modifier = Modifier.testTag("nav_guide_tab")
+                    modifier = Modifier.testTag("nav_vault_tab")
                 )
             }
         }
@@ -278,7 +278,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize()
                 )
-                3 -> PrivateGuideTab(
+                3 -> PrivateVaultTab(
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -286,9 +286,9 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    // Video Player Dialog (shows when a video is being played)
+    // Pro Video Player Dialog (shows when a video is being played)
     playingVideo?.let { item ->
-        VideoPlayerDialog(
+        ProVideoPlayerDialog(
             item = item,
             onDismiss = { viewModel.closePlayer() },
             onShare = { viewModel.shareVideo(item, context) },

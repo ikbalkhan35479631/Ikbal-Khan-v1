@@ -59,20 +59,26 @@ object TelegramPublicExtractor {
             val html = response.body?.string() ?: return@withContext null
 
             // 1. Extract Video Stream URL
-            // Example: <video src="https://cdn4.telesco.pe/file/...mp4?token=..." ...>
-            val videoRegex = Pattern.compile("""<video[^>]+src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE)
-            val videoMatcher = videoRegex.matcher(html)
             var videoUrl: String? = null
-            if (videoMatcher.find()) {
-                videoUrl = videoMatcher.group(1)?.replace("&amp;", "&")
-            }
+            val videoPatterns = listOf(
+                Pattern.compile("""<video[^>]+src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""<source[^>]+src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""data-src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""data-video=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""(https://cdn[0-9]*\.telesco\.pe/file/[^"'\s<>]+\.(?:mp4|mkv|webm|mov)\?[^"'\s<>]+)"""),
+                Pattern.compile("""(https://cdn[0-9]*\.telescope\.net/file/[^"'\s<>]+\.(?:mp4|mkv|webm|mov)\?[^"'\s<>]+)"""),
+                Pattern.compile("""(https://cdn[0-9]*\.telesco\.pe/file/[^"'\s<>]+)"""),
+                Pattern.compile("""(https://cdn[0-9]*\.telescope\.net/file/[^"'\s<>]+)""")
+            )
 
-            // Fallback video match from telescope CDN
-            if (videoUrl.isNullOrBlank()) {
-                val cdnVideoRegex = Pattern.compile("""(https://cdn[0-9]*\.telesco\.pe/file/[a-zA-Z0-9_-]+\.mp4\?token=[^"'\s<>]+)""")
-                val cdnMatcher = cdnVideoRegex.matcher(html)
-                if (cdnMatcher.find()) {
-                    videoUrl = cdnMatcher.group(1)?.replace("&amp;", "&")
+            for (p in videoPatterns) {
+                val m = p.matcher(html)
+                if (m.find()) {
+                    val found = m.group(1)?.replace("&amp;", "&")
+                    if (!found.isNullOrBlank() && (found.contains(".mp4") || found.contains("telesco") || found.contains("video"))) {
+                        videoUrl = found
+                        break
+                    }
                 }
             }
 
@@ -188,18 +194,30 @@ object TelegramPublicExtractor {
             if (!response.isSuccessful) return null
             val html = response.body?.string() ?: return null
 
-            val videoRegex = Pattern.compile("""<video[^>]+src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE)
-            val matcher = videoRegex.matcher(html)
-            if (matcher.find()) {
-                val vUrl = matcher.group(1)?.replace("&amp;", "&") ?: return null
-                return TelegramPublicMedia(
-                    directStreamUrl = vUrl,
-                    title = "TG_${channel}_$messageId.mp4",
-                    mimeType = "video/mp4",
-                    thumbnailUrl = null,
-                    isVideo = true,
-                    isDocument = false
-                )
+            val videoPatterns = listOf(
+                Pattern.compile("""<video[^>]+src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""<source[^>]+src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""data-src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""data-video=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("""(https://cdn[0-9]*\.telesco\.pe/file/[^"'\s<>]+\.(?:mp4|mkv|webm|mov)\?[^"'\s<>]+)"""),
+                Pattern.compile("""(https://cdn[0-9]*\.telescope\.net/file/[^"'\s<>]+\.(?:mp4|mkv|webm|mov)\?[^"'\s<>]+)"""),
+                Pattern.compile("""(https://cdn[0-9]*\.telesco\.pe/file/[^"'\s<>]+)"""),
+                Pattern.compile("""(https://cdn[0-9]*\.telescope\.net/file/[^"'\s<>]+)""")
+            )
+
+            for (p in videoPatterns) {
+                val matcher = p.matcher(html)
+                if (matcher.find()) {
+                    val vUrl = matcher.group(1)?.replace("&amp;", "&") ?: continue
+                    return TelegramPublicMedia(
+                        directStreamUrl = vUrl,
+                        title = "TG_${channel}_$messageId.mp4",
+                        mimeType = "video/mp4",
+                        thumbnailUrl = null,
+                        isVideo = true,
+                        isDocument = false
+                    )
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "tryExtractFromPublicPage error: ${e.message}")

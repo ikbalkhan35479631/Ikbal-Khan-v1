@@ -76,17 +76,22 @@ fun SavedVideosTab(
     val completedList by viewModel.completedDownloads.collectAsState()
     var filterType by remember { mutableStateOf("ALL") }
 
-    val filteredList = when (filterType) {
-        "VIDEO" -> completedList.filter {
-            it.mimeType.startsWith("video/") || it.title.endsWith(".mp4", true) || it.title.endsWith(".mkv", true)
-        }
-        "FILES" -> completedList.filter {
-            !it.mimeType.startsWith("video/") && !it.title.endsWith(".mp4", true) && !it.title.endsWith(".mkv", true)
-        }
-        else -> completedList
+    // Only show non-locked items in the general list (locked items belong to Private Vault)
+    val unlockedList = remember(completedList) {
+        completedList.filter { !it.isLocked }
     }
 
-    if (completedList.isEmpty()) {
+    val filteredList = when (filterType) {
+        "VIDEO" -> unlockedList.filter {
+            it.mimeType.startsWith("video/") || it.title.endsWith(".mp4", true) || it.title.endsWith(".mkv", true)
+        }
+        "FILES" -> unlockedList.filter {
+            !it.mimeType.startsWith("video/") && !it.title.endsWith(".mp4", true) && !it.title.endsWith(".mkv", true)
+        }
+        else -> unlockedList
+    }
+
+    if (unlockedList.isEmpty()) {
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -145,7 +150,7 @@ fun SavedVideosTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "সংরক্ষিত ফাইল ও ভিডিও (${completedList.size})",
+                            text = "সংরক্ষিত ফাইল ও ভিডিও (${unlockedList.size})",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = VipGold
@@ -165,13 +170,13 @@ fun SavedVideosTab(
                         FilterChip(
                             selected = filterType == "ALL",
                             onClick = { filterType = "ALL" },
-                            label = { Text("সবগুলো (${completedList.size})", fontSize = 11.sp) }
+                            label = { Text("সবগুলো (${unlockedList.size})", fontSize = 11.sp) }
                         )
                         FilterChip(
                             selected = filterType == "VIDEO",
                             onClick = { filterType = "VIDEO" },
                             label = {
-                                val count = completedList.count { it.mimeType.startsWith("video/") || it.title.endsWith(".mp4", true) }
+                                val count = unlockedList.count { it.mimeType.startsWith("video/") || it.title.endsWith(".mp4", true) }
                                 Text("ভিডিও ($count)", fontSize = 11.sp)
                             }
                         )
@@ -179,7 +184,7 @@ fun SavedVideosTab(
                             selected = filterType == "FILES",
                             onClick = { filterType = "FILES" },
                             label = {
-                                val count = completedList.count { !it.mimeType.startsWith("video/") && !it.title.endsWith(".mp4", true) }
+                                val count = unlockedList.count { !it.mimeType.startsWith("video/") && !it.title.endsWith(".mp4", true) }
                                 Text("ফাইল ও ডক্স ($count)", fontSize = 11.sp)
                             }
                         )
@@ -192,6 +197,7 @@ fun SavedVideosTab(
                     item = item,
                     onPlay = { viewModel.playVideo(item) },
                     onOpenFile = { viewModel.openDownloadedFile(item, context) },
+                    onLock = { viewModel.toggleLockVideo(item, true, context) },
                     onShare = { viewModel.shareVideo(item, context) },
                     onExport = { viewModel.exportToGallery(item, context) },
                     onDelete = { viewModel.deleteCompleted(item, context) }
@@ -206,6 +212,7 @@ fun SavedVideoCard(
     item: DownloadItem,
     onPlay: () -> Unit,
     onOpenFile: () -> Unit,
+    onLock: () -> Unit,
     onShare: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit
@@ -381,6 +388,17 @@ fun SavedVideoCard(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = onLock,
+                        modifier = Modifier.testTag("lock_button_${item.id}")
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Lock to Private Vault",
+                            tint = VipGold
+                        )
+                    }
+
                     IconButton(
                         onClick = onExport,
                         modifier = Modifier.testTag("export_button_${item.id}")
