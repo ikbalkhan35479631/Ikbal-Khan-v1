@@ -1,6 +1,6 @@
 {
   "name": "VIP Video Downloader",
-  "description": "Download 10+ videos simultaneously in 4K/1080p high quality from Telegram, YouTube, Facebook, Instagram, Google and all web platforms with VIP Turbo multi-stream acceleration.",
+  "description": "VIP Telegram & Multi-platform Video & All-Files Downloader with Bot-free public Telegram media resolution, 10+ batch downloading, Room database persistence, and connectivity loss detection.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

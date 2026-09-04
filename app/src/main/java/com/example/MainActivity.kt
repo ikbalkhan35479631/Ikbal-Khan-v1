@@ -135,7 +135,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Text(
-                            text = "VIP Video Downloader",
+                            text = "VIP TG & Files",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = VipGold

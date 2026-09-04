@@ -74,21 +74,23 @@ object TelegramLinkParser {
             )
         }
 
-        // 4. Public Telegram link: https://t.me/channel_name/123
-        val publicRegex = Regex("""(?:https?://)?t\.me/([a-zA-Z0-9_]+)/(\d+)""")
+        // 4. Public Telegram link: https://t.me/channel_name/123 or t.me/s/channel_name/123
+        val publicRegex = Regex("""(?:https?://)?(?:t\.me|telegram\.me)/(?:s/)?([a-zA-Z0-9_]+)/(\d+)""")
         val publicMatch = publicRegex.find(trimmed)
         if (publicMatch != null) {
             val channelName = publicMatch.groupValues[1]
             val msgId = publicMatch.groupValues[2]
-            return ParsedLink(
-                originalUrl = trimmed,
-                linkType = LinkType.PUBLIC_CHANNEL,
-                channelIdentifier = "@$channelName",
-                messageId = msgId,
-                suggestedTitle = "TG_${channelName}_$msgId.mp4",
-                isPrivate = false,
-                infoMessage = "Telegram Public Channel (@$channelName, Msg: #$msgId)"
-            )
+            if (channelName != "c") {
+                return ParsedLink(
+                    originalUrl = trimmed,
+                    linkType = LinkType.PUBLIC_CHANNEL,
+                    channelIdentifier = "@$channelName",
+                    messageId = msgId,
+                    suggestedTitle = "TG_${channelName}_$msgId.mp4",
+                    isPrivate = false,
+                    infoMessage = "Telegram Public Channel (@$channelName, Msg: #$msgId) - নো বট দরকার নেই"
+                )
+            }
         }
 
         // 5. Direct video stream or CDN URL

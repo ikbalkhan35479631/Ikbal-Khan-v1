@@ -32,6 +32,14 @@ val SuccessGreen = Color(0xFF33C458)
 val WarningAmber = Color(0xFFFFB300)
 val ErrorRed = Color(0xFFFF5252)
 
+// File Type Colors
+val ApkGreen = Color(0xFF00E676)
+val PdfRed = Color(0xFFFF334B)
+val ZipOrange = Color(0xFFFF9100)
+val AudioPurple = Color(0xFFB388FF)
+val DocBlue = Color(0xFF2979FF)
+val AllFilesIndigo = Color(0xFF6C5CE7)
+
 val DarkBackground = Color(0xFF0C0D13)
 val DarkSurface = Color(0xFF141620)
 val DarkSurfaceVariant = Color(0xFF1C1F2D)

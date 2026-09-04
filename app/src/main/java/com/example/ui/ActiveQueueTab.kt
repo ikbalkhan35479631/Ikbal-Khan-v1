@@ -24,7 +24,12 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
@@ -56,7 +61,11 @@ import com.example.data.DownloadItem
 import com.example.data.DownloadStatus
 import com.example.engine.MultiPlatformVideoResolver
 import com.example.engine.TelegramVideoDownloaderEngine
+import com.example.ui.theme.ApkGreen
+import com.example.ui.theme.AudioPurple
+import com.example.ui.theme.DocBlue
 import com.example.ui.theme.ErrorRed
+import com.example.ui.theme.PdfRed
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.TelegramAccent
 import com.example.ui.theme.TelegramBlue
@@ -64,6 +73,7 @@ import com.example.ui.theme.VipGold
 import com.example.ui.theme.VipGoldBorder
 import com.example.ui.theme.VipGoldLight
 import com.example.ui.theme.WarningAmber
+import com.example.ui.theme.ZipOrange
 
 @Composable
 fun ActiveQueueTab(
@@ -71,6 +81,8 @@ fun ActiveQueueTab(
     modifier: Modifier = Modifier
 ) {
     val activeList by viewModel.activeDownloads.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val networkLossNotice by viewModel.networkLossNotice.collectAsState()
 
     if (activeList.isEmpty()) {
         Box(
@@ -83,6 +95,26 @@ fun ActiveQueueTab(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
+                // Offline Notice if offline even when queue is empty
+                if (!isOnline) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 20.dp),
+                        colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CloudOff, contentDescription = null, tint = ErrorRed)
+                            Spacer(Modifier.width(8.dp))
+                            Text("ইন্টারনেট বিচ্ছিন্ন। সংযোগ এলে ডাউনলোড শুরু হবে।", color = ErrorRed, fontSize = 12.sp)
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .size(80.dp)
@@ -101,7 +133,7 @@ fun ActiveQueueTab(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "কোনো ভিডিও ডাউনলোড হচ্ছে না",
+                    text = "কোনো ডাউনলোড সক্রিয় নেই",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -109,7 +141,7 @@ fun ActiveQueueTab(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "ডাউনলোডার ট্যাবে YouTube, Telegram, Facebook, Instagram, Google বা সরাসরি লিঙ্ক দিয়ে ডাউনলোড শুরু করুন।",
+                    text = "ডাউনলোডার ট্যাবে Telegram, Web ভিডিও বা যে কোনো ফাইলের লিঙ্ক দিয়ে ডাউনলোড শুরু করুন।",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -123,6 +155,48 @@ fun ActiveQueueTab(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Network Disconnected Alert Banner in Queue
+            if (!isOnline || networkLossNotice != null) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("queue_offline_banner"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.18f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = "Offline",
+                                tint = ErrorRed,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "ইন্টারনেট সংযোগ বিচ্ছিন্ন! (Network Lost)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ErrorRed
+                                )
+                                Text(
+                                    text = "ডাউনলোড স্বয়ংক্রিয়ভাবে স্থগিত রয়েছে। সংযোগ ফিরলে 'Resume' চাপুন।",
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
@@ -133,7 +207,7 @@ fun ActiveQueueTab(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "ডাউনলোড কিউ (${activeList.size}টি ভিডিও)",
+                                    text = "ডাউনলোড কিউ (${activeList.size}টি আইটেম)",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = VipGold
@@ -158,29 +232,43 @@ fun ActiveQueueTab(
                             Text(
                                 text = "হাই-স্পিড মাল্টি-স্ট্রিম অ্যাক্সিলারেটর সক্রিয়",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = { viewModel.pauseAll() },
-                                modifier = Modifier.testTag("pause_all_button"),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Pause All", fontSize = 12.sp)
+                        // Status counts
+                        val downloadingCount = activeList.count { it.status == DownloadStatus.DOWNLOADING }
+                        val pausedCount = activeList.count { it.status == DownloadStatus.PAUSED }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (downloadingCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(SuccessGreen.copy(alpha = 0.2f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "$downloadingCount টি চলমান",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SuccessGreen
+                                    )
+                                }
                             }
-
-                            FilledTonalButton(
-                                onClick = { viewModel.resumeAll() },
-                                modifier = Modifier.testTag("resume_all_button"),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = VipGold,
-                                    contentColor = Color.Black
-                                )
-                            ) {
-                                Text("Resume All", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            if (pausedCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(WarningAmber.copy(alpha = 0.2f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "$pausedCount টি বিরতি",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = WarningAmber
+                                    )
+                                }
                             }
                         }
                     }
@@ -214,6 +302,28 @@ fun ActiveDownloadItemCard(
     val animatedProgress by animateFloatAsState(targetValue = progress, label = "DownloadProgress")
 
     val platform = MultiPlatformVideoResolver.detectPlatform(item.originalUrl)
+    val isVideo = item.mimeType.startsWith("video/") || item.title.endsWith(".mp4", true) || item.title.endsWith(".mkv", true)
+    val isAudio = item.mimeType.startsWith("audio/") || item.title.endsWith(".mp3", true)
+    val isPdf = item.mimeType == "application/pdf" || item.title.endsWith(".pdf", true)
+    val isApk = item.title.endsWith(".apk", true)
+    val isZip = item.title.endsWith(".zip", true) || item.title.endsWith(".rar", true)
+
+    val itemIcon = when {
+        isPdf -> Icons.Default.Description
+        isAudio -> Icons.Default.MusicNote
+        isApk || isZip -> Icons.Default.Folder
+        isVideo -> Icons.Default.Movie
+        else -> Icons.Default.Description
+    }
+
+    val iconTint = when {
+        isPdf -> PdfRed
+        isAudio -> AudioPurple
+        isApk -> ApkGreen
+        isZip -> ZipOrange
+        isVideo -> VipGold
+        else -> DocBlue
+    }
 
     Card(
         modifier = Modifier
@@ -238,61 +348,80 @@ fun ActiveDownloadItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(3.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(iconTint.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Platform Tag
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(platform.colorHex).copy(alpha = 0.2f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = platform.displayName,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(platform.colorHex)
-                            )
-                        }
+                        Icon(
+                            imageVector = itemIcon,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
 
-                        if (item.isPrivateChannel) {
-                            Icon(
-                                Icons.Default.Lock,
-                                contentDescription = "Private",
-                                tint = WarningAmber,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Text(
-                                text = "Private Channel",
-                                fontSize = 11.sp,
-                                color = WarningAmber,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = "Public",
-                                tint = TelegramAccent,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Text(
-                                text = "Fast Stream",
-                                fontSize = 11.sp,
-                                color = TelegramAccent
-                            )
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            // Platform Tag
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(platform.colorHex).copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = platform.displayName,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(platform.colorHex)
+                                )
+                            }
+
+                            if (item.isPrivateChannel) {
+                                Icon(
+                                    Icons.Default.Lock,
+                                    contentDescription = "Private",
+                                    tint = WarningAmber,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "Private Channel",
+                                    fontSize = 11.sp,
+                                    color = WarningAmber,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Public,
+                                    contentDescription = "Public",
+                                    tint = TelegramAccent,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "Fast Stream",
+                                    fontSize = 11.sp,
+                                    color = TelegramAccent
+                                )
+                            }
                         }
                     }
                 }
@@ -388,7 +517,7 @@ fun ActiveDownloadItemCard(
                 }
             }
 
-            // Action Buttons (Pause / Resume)
+            // Action Buttons (Pause / Resume / Retry)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,

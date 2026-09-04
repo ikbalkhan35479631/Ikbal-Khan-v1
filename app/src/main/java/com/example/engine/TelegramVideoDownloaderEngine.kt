@@ -54,7 +54,9 @@ class TelegramVideoDownloaderEngine(
             wakeLock = powerManager?.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "TelegramDownloader:DownloadWakeLock"
-            )
+            )?.apply {
+                setReferenceCounted(false)
+            }
         } catch (e: Exception) {
             Log.e("DownloaderEngine", "Could not create WakeLock", e)
         }
@@ -174,15 +176,30 @@ class TelegramVideoDownloaderEngine(
             )
         }
 
-        // 2. Check if the URL is an unconverted Telegram page URL (e.g. t.me/c/... or t.me/...)
-        if (item.downloadUrl.startsWith("https://t.me/") || item.downloadUrl.startsWith("http://t.me/")) {
-            throw IllegalStateException(
-                "টেলিগ্রাম পেজ সরাসরি ভিডিও ফাইল নয়। টেলিগ্রামের প্রটেক্টেড ভিডিও ডাউনলোডের জন্য টেলিগ্রাম বট ফরওয়ার্ডার বা সরাসরি মিডিয়া স্ট্রিম লিঙ্ক ব্যবহার করুন। (প্রাইভেট গাইড ট্যাব দেখুন)"
-            )
+        // 2. Check if the URL is a Telegram link and auto-resolve public media
+        var targetUrl = item.downloadUrl
+        if (targetUrl.startsWith("https://t.me/") || targetUrl.startsWith("http://t.me/")) {
+            val tgParsed = TelegramLinkParser.parse(targetUrl)
+            if (tgParsed.linkType == LinkType.PUBLIC_CHANNEL) {
+                val resolvedMedia = TelegramPublicExtractor.resolvePublicMedia(tgParsed.channelIdentifier, tgParsed.messageId)
+                if (resolvedMedia != null && resolvedMedia.directStreamUrl.isNotBlank()) {
+                    targetUrl = resolvedMedia.directStreamUrl
+                    val updatedTitle = if (item.title.startsWith("TG_") || item.title.startsWith("video_")) resolvedMedia.title else item.title
+                    val updatedMime = resolvedMedia.mimeType
+                    downloadDao.update(item.copy(downloadUrl = targetUrl, title = updatedTitle, mimeType = updatedMime))
+                } else {
+                    throw IllegalStateException(
+                        "পাবলিক টেলিগ্রাম পোস্টটি থেকে সরাসরি মিডিয়া বা ফাইল স্ট্রিম পাওয়া যায়নি। পোস্টটিতে ভিডিও বা ফাইল সংযুক্ত আছে কি না তা যাচাই করুন।"
+                    )
+                }
+            } else if (tgParsed.isPrivate) {
+                throw IllegalStateException(
+                    "এটি একটি প্রাইভেট টেলিগ্রাম চ্যানেলের লিঙ্ক। টেলিগ্রামের প্রাইভেসি বিধিনিষেধের কারণে প্রাইভেট চ্যানেলের ভিডিও বট বা ফরওয়ার্ডার ব্রিজের মাধ্যমে ডাউনলোড করতে হয়। পাবলিক চ্যানেল কোনো বট ছাড়াই সরাসরি ডাউনলোড হবে।"
+                )
+            }
         }
 
         // 3. Check for unconverted web video page URLs and attempt auto-resolution
-        var targetUrl = item.downloadUrl
         if (MultiPlatformVideoResolver.isWebPageUrl(targetUrl)) {
             try {
                 val analysis = MultiPlatformVideoResolver.analyzeUrl(item.originalUrl)
@@ -359,8 +376,22 @@ class TelegramVideoDownloaderEngine(
                 )
                 downloadDao.update(completed)
 
-                // Automatically export to Android MediaStore Gallery (Movies/TelegramDownloads)
-                exportToGallery(context, destinationFile, completed.title)
+                // Automatically register in Android MediaStore Gallery
+                if (destinationFile.length() <= 300 * 1024 * 1024L) {
+                    exportToGallery(context, destinationFile, completed.title)
+                } else {
+                    // For large files (e.g. 3GB+ movies), scan directly with MediaScanner to avoid duplicating multi-GB storage
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(destinationFile.absolutePath),
+                            arrayOf(completed.mimeType),
+                            null
+                        )
+                    } catch (e: Exception) {
+                        Log.w("DownloaderEngine", "MediaScanner scan error: ${e.message}")
+                    }
+                }
             }
         } finally {
             try {
@@ -434,41 +465,88 @@ class TelegramVideoDownloaderEngine(
         }
 
         fun exportToGallery(context: Context, sourceFile: File, title: String): Pair<Boolean, String> {
+            return exportDownloadedFile(context, sourceFile, title, "")
+        }
+
+        fun exportDownloadedFile(
+            context: Context,
+            sourceFile: File,
+            title: String,
+            specifiedMime: String = ""
+        ): Pair<Boolean, String> {
             return try {
                 if (!sourceFile.exists() || sourceFile.length() == 0L) {
                     return Pair(false, "File does not exist or is empty (${sourceFile.length()} bytes)")
                 }
 
-                val safeTitle = if (title.isBlank()) "TG_Video_${System.currentTimeMillis()}" else title
-                val cleanFileName = if (safeTitle.endsWith(".mp4", ignoreCase = true) || 
-                    safeTitle.endsWith(".mkv", ignoreCase = true) || 
-                    safeTitle.endsWith(".webm", ignoreCase = true)) {
-                    safeTitle
+                val safeTitle = if (title.isBlank()) "File_${System.currentTimeMillis()}" else title
+                val cleanFileName = if (!safeTitle.contains(".")) {
+                    when {
+                        specifiedMime.startsWith("audio/") -> "$safeTitle.mp3"
+                        specifiedMime.startsWith("video/") -> "$safeTitle.mp4"
+                        specifiedMime == "application/pdf" -> "$safeTitle.pdf"
+                        specifiedMime == "application/zip" -> "$safeTitle.zip"
+                        else -> "$safeTitle.mp4"
+                    }
                 } else {
-                    "$safeTitle.mp4"
+                    safeTitle
                 }
 
+                val isVideo = cleanFileName.endsWith(".mp4", ignoreCase = true) ||
+                        cleanFileName.endsWith(".mkv", ignoreCase = true) ||
+                        cleanFileName.endsWith(".webm", ignoreCase = true) ||
+                        cleanFileName.endsWith(".mov", ignoreCase = true)
+
+                val isAudio = cleanFileName.endsWith(".mp3", ignoreCase = true) ||
+                        cleanFileName.endsWith(".m4a", ignoreCase = true) ||
+                        cleanFileName.endsWith(".wav", ignoreCase = true) ||
+                        cleanFileName.endsWith(".flac", ignoreCase = true) ||
+                        cleanFileName.endsWith(".ogg", ignoreCase = true)
+
                 val mime = when {
+                    specifiedMime.isNotBlank() -> specifiedMime
                     cleanFileName.endsWith(".mkv", ignoreCase = true) -> "video/x-matroska"
                     cleanFileName.endsWith(".webm", ignoreCase = true) -> "video/webm"
-                    else -> "video/mp4"
+                    cleanFileName.endsWith(".mp4", ignoreCase = true) -> "video/mp4"
+                    cleanFileName.endsWith(".mp3", ignoreCase = true) -> "audio/mpeg"
+                    cleanFileName.endsWith(".m4a", ignoreCase = true) -> "audio/mp4"
+                    cleanFileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+                    cleanFileName.endsWith(".apk", ignoreCase = true) -> "application/vnd.android.package-archive"
+                    cleanFileName.endsWith(".zip", ignoreCase = true) -> "application/zip"
+                    cleanFileName.endsWith(".rar", ignoreCase = true) -> "application/x-rar-compressed"
+                    cleanFileName.endsWith(".png", ignoreCase = true) -> "image/png"
+                    cleanFileName.endsWith(".jpg", ignoreCase = true) || cleanFileName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+                    else -> "application/octet-stream"
                 }
 
                 val resolver = context.contentResolver
+                val targetCollectionUri: Uri = when {
+                    isVideo -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                    isAudio -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                    else -> MediaStore.Files.getContentUri("external")
+                }
+
+                val relativeFolder = when {
+                    isVideo -> Environment.DIRECTORY_MOVIES + "/VIPDownloads"
+                    isAudio -> Environment.DIRECTORY_MUSIC + "/VIPDownloads"
+                    else -> Environment.DIRECTORY_DOWNLOADS + "/VIPDownloads"
+                }
+
                 val contentValues = ContentValues().apply {
-                    put(MediaStore.Video.Media.TITLE, safeTitle)
-                    put(MediaStore.Video.Media.DISPLAY_NAME, cleanFileName)
-                    put(MediaStore.Video.Media.MIME_TYPE, mime)
-                    put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
+                    put(MediaStore.MediaColumns.TITLE, safeTitle)
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, cleanFileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(MediaStore.MediaColumns.DATE_ADDED, System.currentTimeMillis() / 1000)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/TelegramDownloads")
-                        put(MediaStore.Video.Media.IS_PENDING, 1)
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, relativeFolder)
+                        put(MediaStore.MediaColumns.IS_PENDING, 1)
                     }
                 }
 
                 var uri: Uri? = null
                 try {
-                    uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+                    uri = resolver.insert(targetCollectionUri, contentValues)
                 } catch (e: Exception) {
                     Log.w("DownloaderEngine", "MediaStore insert exception: ${e.message}")
                 }
@@ -482,12 +560,11 @@ class TelegramVideoDownloaderEngine(
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         val finalValues = ContentValues().apply {
-                            put(MediaStore.Video.Media.IS_PENDING, 0)
+                            put(MediaStore.MediaColumns.IS_PENDING, 0)
                         }
                         resolver.update(uri, finalValues, null, null)
                     }
 
-                    // Trigger MediaScanner for Gallery refresh
                     try {
                         android.media.MediaScannerConnection.scanFile(
                             context,
@@ -499,15 +576,17 @@ class TelegramVideoDownloaderEngine(
                         // non-fatal
                     }
 
-                    Pair(true, "Saved to Gallery (${formatBytes(bytesCopied)})")
+                    val destinationLabel = if (isVideo) "গ্যালারি (Movies/VIPDownloads)" else "ডাউনলোডস ফোল্ডার ($relativeFolder)"
+                    Pair(true, "সেভ হয়েছে: $destinationLabel (${formatBytes(bytesCopied)})")
                 } else {
-                    // Fallback for Rooted devices, Custom ROMs, or Android <= 9
-                    val publicMoviesDir = File(
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
-                        "VIPDownloads"
-                    )
-                    publicMoviesDir.mkdirs()
-                    val targetPublicFile = File(publicMoviesDir, cleanFileName)
+                    // Fallback to public folder
+                    val publicDir = when {
+                        isVideo -> File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "VIPDownloads")
+                        isAudio -> File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "VIPDownloads")
+                        else -> File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "VIPDownloads")
+                    }
+                    publicDir.mkdirs()
+                    val targetPublicFile = File(publicDir, cleanFileName)
                     sourceFile.copyTo(targetPublicFile, overwrite = true)
 
                     try {
@@ -521,10 +600,10 @@ class TelegramVideoDownloaderEngine(
                         // non-fatal
                     }
 
-                    Pair(true, "Saved to Public Movies (${formatBytes(targetPublicFile.length())})")
+                    Pair(true, "সেভ হয়েছে: ${targetPublicFile.parent} (${formatBytes(targetPublicFile.length())})")
                 }
             } catch (e: Exception) {
-                Log.e("DownloaderEngine", "Failed to export to gallery", e)
+                Log.e("DownloaderEngine", "Failed to export file", e)
                 Pair(false, e.localizedMessage ?: "Unknown error")
             }
         }

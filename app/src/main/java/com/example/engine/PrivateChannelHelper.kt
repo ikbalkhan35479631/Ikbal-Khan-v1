@@ -33,23 +33,35 @@ class PrivateChannelHelper(context: Context) {
 
     /**
      * Resolves a Telegram link into a downloadable video URL.
-     * Supports Bot API endpoints, custom proxy/bridge, or direct stream resolution.
+     * Supports Bot API endpoints, custom proxy/bridge, direct stream resolution,
+     * or automatic public embed media extraction (NO BOT REQUIRED).
      */
-    fun resolveDownloadUrl(parsedLink: ParsedLink): String {
+    suspend fun resolveDownloadUrl(parsedLink: ParsedLink): String {
         val settings = getSettings()
 
-        // If it's already a direct bot stream or direct video URL:
+        // 1. If it's already a direct bot stream or direct video URL:
         if (parsedLink.linkType == LinkType.BOT_FILE || parsedLink.linkType == LinkType.DIRECT_VIDEO) {
             return parsedLink.originalUrl
         }
 
-        // If user configured a custom proxy or forwarder bridge URL:
+        // 2. If it's a public Telegram channel: resolve directly without needing any bot!
+        if (parsedLink.linkType == LinkType.PUBLIC_CHANNEL) {
+            val publicMedia = TelegramPublicExtractor.resolvePublicMedia(
+                channel = parsedLink.channelIdentifier,
+                messageId = parsedLink.messageId
+            )
+            if (publicMedia != null && publicMedia.directStreamUrl.isNotBlank()) {
+                return publicMedia.directStreamUrl
+            }
+        }
+
+        // 3. If user configured a custom proxy or forwarder bridge URL:
         if (settings.customProxyUrl.isNotBlank()) {
             val bridge = settings.customProxyUrl.trimEnd('/')
             return "$bridge/download?url=${java.net.URLEncoder.encode(parsedLink.originalUrl, "UTF-8")}"
         }
 
-        // Default or Fallback: return the original url
+        // Default or Fallback: return original url
         return parsedLink.originalUrl
     }
 }

@@ -19,24 +19,29 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,13 +53,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DownloadItem
-import com.example.engine.TelegramVideoDownloaderEngine
 import com.example.engine.MultiPlatformVideoResolver
-import com.example.ui.theme.TelegramAccent
+import com.example.engine.TelegramVideoDownloaderEngine
+import com.example.ui.theme.ApkGreen
+import com.example.ui.theme.AudioPurple
+import com.example.ui.theme.DocBlue
+import com.example.ui.theme.PdfRed
 import com.example.ui.theme.TelegramBlue
 import com.example.ui.theme.VipGold
-import com.example.ui.theme.VipGoldBorder
 import com.example.ui.theme.WarningAmber
+import com.example.ui.theme.ZipOrange
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -66,6 +74,17 @@ fun SavedVideosTab(
 ) {
     val context = LocalContext.current
     val completedList by viewModel.completedDownloads.collectAsState()
+    var filterType by remember { mutableStateOf("ALL") }
+
+    val filteredList = when (filterType) {
+        "VIDEO" -> completedList.filter {
+            it.mimeType.startsWith("video/") || it.title.endsWith(".mp4", true) || it.title.endsWith(".mkv", true)
+        }
+        "FILES" -> completedList.filter {
+            !it.mimeType.startsWith("video/") && !it.title.endsWith(".mp4", true) && !it.title.endsWith(".mkv", true)
+        }
+        else -> completedList
+    }
 
     if (completedList.isEmpty()) {
         Box(
@@ -87,7 +106,7 @@ fun SavedVideosTab(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Movie,
-                        contentDescription = "No Saved Videos",
+                        contentDescription = "No Saved Media",
                         tint = VipGold,
                         modifier = Modifier.size(44.dp)
                     )
@@ -96,7 +115,7 @@ fun SavedVideosTab(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "কোনো ডাউনলোড করা ভিডিও নেই",
+                    text = "কোনো সংরক্ষিত ভিডিও বা ফাইল নেই",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -104,7 +123,7 @@ fun SavedVideosTab(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "ভিডিও ডাউনলোড শেষ হলে এখানে দেখতে পাবেন এবং সরাসরি প্লে করতে পারবেন।",
+                    text = "ডাউনলোড শেষ হলে ভিডিও বা ফাইল এখানে দেখতে পাবেন এবং সরাসরি প্লে বা ওপেন করতে পারবেন।",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -119,23 +138,60 @@ fun SavedVideosTab(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "সংরক্ষিত ভিডিওসমূহ (${completedList.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "সংরক্ষিত ফাইল ও ভিডিও (${completedList.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = VipGold
+                        )
+
+                        Text(
+                            text = "সব মুছে ফেলুন",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { viewModel.clearAllCompleted(context) }
+                        )
+                    }
+
+                    // Filter chips: All, Videos, Files
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = filterType == "ALL",
+                            onClick = { filterType = "ALL" },
+                            label = { Text("সবগুলো (${completedList.size})", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = filterType == "VIDEO",
+                            onClick = { filterType = "VIDEO" },
+                            label = {
+                                val count = completedList.count { it.mimeType.startsWith("video/") || it.title.endsWith(".mp4", true) }
+                                Text("ভিডিও ($count)", fontSize = 11.sp)
+                            }
+                        )
+                        FilterChip(
+                            selected = filterType == "FILES",
+                            onClick = { filterType = "FILES" },
+                            label = {
+                                val count = completedList.count { !it.mimeType.startsWith("video/") && !it.title.endsWith(".mp4", true) }
+                                Text("ফাইল ও ডক্স ($count)", fontSize = 11.sp)
+                            }
+                        )
+                    }
                 }
             }
 
-            items(completedList, key = { it.id }) { item ->
+            items(filteredList, key = { it.id }) { item ->
                 SavedVideoCard(
                     item = item,
                     onPlay = { viewModel.playVideo(item) },
+                    onOpenFile = { viewModel.openDownloadedFile(item, context) },
                     onShare = { viewModel.shareVideo(item, context) },
                     onExport = { viewModel.exportToGallery(item, context) },
                     onDelete = { viewModel.deleteCompleted(item, context) }
@@ -149,6 +205,7 @@ fun SavedVideosTab(
 fun SavedVideoCard(
     item: DownloadItem,
     onPlay: () -> Unit,
+    onOpenFile: () -> Unit,
     onShare: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit
@@ -156,6 +213,29 @@ fun SavedVideoCard(
     val dateStr = item.completedAt?.let {
         SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(it))
     } ?: "Downloaded"
+
+    val isVideo = item.mimeType.startsWith("video/") || item.title.endsWith(".mp4", true) || item.title.endsWith(".mkv", true)
+    val isAudio = item.mimeType.startsWith("audio/") || item.title.endsWith(".mp3", true)
+    val isPdf = item.mimeType == "application/pdf" || item.title.endsWith(".pdf", true)
+    val isApk = item.title.endsWith(".apk", true)
+    val isZip = item.title.endsWith(".zip", true) || item.title.endsWith(".rar", true)
+
+    val itemIcon = when {
+        isPdf -> Icons.Default.Description
+        isAudio -> Icons.Default.MusicNote
+        isApk || isZip -> Icons.Default.Folder
+        isVideo -> Icons.Default.PlayArrow
+        else -> Icons.Default.Description
+    }
+
+    val iconTint = when {
+        isPdf -> PdfRed
+        isAudio -> AudioPurple
+        isApk -> ApkGreen
+        isZip -> ZipOrange
+        isVideo -> VipGold
+        else -> DocBlue
+    }
 
     Card(
         modifier = Modifier
@@ -176,22 +256,22 @@ fun SavedVideoCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onPlay() },
+                    .clickable { if (isVideo) onPlay() else onOpenFile() },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Thumbnail / Play Icon Area
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(54.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(VipGold.copy(alpha = 0.15f)),
+                        .background(iconTint.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play Video",
-                        tint = VipGold,
-                        modifier = Modifier.size(32.dp)
+                        imageVector = itemIcon,
+                        contentDescription = if (isVideo) "Play Video" else "Open File",
+                        tint = iconTint,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
 
@@ -278,14 +358,26 @@ fun SavedVideoCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalButton(
-                    onClick = onPlay,
-                    modifier = Modifier.testTag("play_button_${item.id}"),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Play Video", fontSize = 12.sp)
+                if (isVideo) {
+                    FilledTonalButton(
+                        onClick = onPlay,
+                        modifier = Modifier.testTag("play_button_${item.id}"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("ভিডিও প্লে করুন", fontSize = 12.sp)
+                    }
+                } else {
+                    FilledTonalButton(
+                        onClick = onOpenFile,
+                        modifier = Modifier.testTag("open_file_button_${item.id}"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = "Open", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("ফাইল ওপেন করুন", fontSize = 12.sp)
+                    }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -295,7 +387,7 @@ fun SavedVideoCard(
                     ) {
                         Icon(
                             Icons.Default.DownloadDone,
-                            contentDescription = "Save to Gallery",
+                            contentDescription = if (isVideo) "Save to Gallery" else "Save to Public Storage",
                             tint = TelegramBlue
                         )
                     }

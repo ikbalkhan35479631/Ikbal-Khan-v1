@@ -230,7 +230,23 @@ object MultiPlatformVideoResolver {
     ): String = withContext(Dispatchers.IO) {
         val trimmed = url.trim()
 
-        // 1. Google Drive direct stream
+        // 1. Telegram Public Channel direct stream resolution (Zero Bot Needed)
+        if (platform == SupportedPlatform.TELEGRAM || trimmed.contains("t.me/")) {
+            val tgParsed = TelegramLinkParser.parse(trimmed)
+            if (tgParsed.linkType == LinkType.PUBLIC_CHANNEL) {
+                val media = TelegramPublicExtractor.resolvePublicMedia(
+                    channel = tgParsed.channelIdentifier,
+                    messageId = tgParsed.messageId
+                )
+                if (media != null && media.directStreamUrl.isNotBlank()) {
+                    return@withContext media.directStreamUrl
+                }
+            } else if (tgParsed.linkType == LinkType.BOT_FILE || tgParsed.linkType == LinkType.DIRECT_VIDEO) {
+                return@withContext tgParsed.originalUrl
+            }
+        }
+
+        // 2. Google Drive direct stream
         if (platform == SupportedPlatform.GOOGLE_DRIVE) {
             val fileId = extractGoogleDriveId(trimmed)
             if (fileId.isNotBlank()) {
@@ -238,7 +254,7 @@ object MultiPlatformVideoResolver {
             }
         }
 
-        // 2. Direct Web URLs or CDN links (mp4, webm, mkv, mp3, cloud storage)
+        // 3. Direct Web URLs or CDN links (mp4, webm, mkv, mp3, cloud storage)
         if (platform == SupportedPlatform.WEB_DIRECT ||
             trimmed.endsWith(".mp4", ignoreCase = true) ||
             trimmed.endsWith(".webm", ignoreCase = true) ||

@@ -24,10 +24,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
@@ -36,6 +40,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -74,15 +79,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.DownloadStatus
-import com.example.engine.PlatformAnalysis
 import com.example.engine.SupportedPlatform
 import com.example.engine.TelegramVideoDownloaderEngine
 import com.example.engine.VideoQuality
+import com.example.ui.theme.ApkGreen
+import com.example.ui.theme.AudioPurple
+import com.example.ui.theme.DocBlue
 import com.example.ui.theme.ErrorRed
-import com.example.ui.theme.FacebookBlue
-import com.example.ui.theme.GoogleEmerald
-import com.example.ui.theme.InstagramPink
+import com.example.ui.theme.PdfRed
 import com.example.ui.theme.SuccessGreen
+import com.example.ui.theme.TelegramAccent
 import com.example.ui.theme.TelegramBlue
 import com.example.ui.theme.VipAmber
 import com.example.ui.theme.VipCardElevated
@@ -90,7 +96,7 @@ import com.example.ui.theme.VipGold
 import com.example.ui.theme.VipGoldBorder
 import com.example.ui.theme.VipGoldLight
 import com.example.ui.theme.WarningAmber
-import com.example.ui.theme.YouTubeRed
+import com.example.ui.theme.ZipOrange
 
 @Composable
 fun DownloaderTab(
@@ -110,6 +116,10 @@ fun DownloaderTab(
     val batchUrlsInput by viewModel.batchUrlsInput.collectAsState()
     val isResolving by viewModel.isResolving.collectAsState()
     val resolvingMessage by viewModel.resolvingMessage.collectAsState()
+    val downloaderMode by viewModel.downloaderMode.collectAsState()
+    val selectedFileFilter by viewModel.selectedFileFilter.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val networkLossNotice by viewModel.networkLossNotice.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -120,7 +130,60 @@ fun DownloaderTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // VIP Luxury Hero Banner
+        // 1. Network Connectivity Indicator & Alert Banner
+        if (!isOnline || networkLossNotice != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("network_offline_alert"),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = ErrorRed.copy(alpha = 0.18f)
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(ErrorRed.copy(alpha = 0.25f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudOff,
+                            contentDescription = "Offline",
+                            tint = ErrorRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "ইন্টারনেট সংযোগ বিচ্ছিন্ন! (Network Disconnected)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = ErrorRed
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = networkLossNotice ?: "ডাউনলোড সাময়িকভাবে বিরতিতে রয়েছে। সংযোগ ফিরলে স্বয়ংক্রিয়ভাবে পুনরায় শুরু করতে পারবেন।",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. VIP Luxury Hero Banner with Real-Time Connectivity Badge
         ElevatedCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -136,86 +199,143 @@ fun DownloaderTab(
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF1E2130),
-                                Color(0xFF2A281E)
+                                Color(0xFF161A29),
+                                Color(0xFF262319),
+                                Color(0xFF101B2E)
                             )
                         )
                     )
                     .padding(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(VipGold, VipAmber)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "VIP",
-                            tint = Color.Black,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "VIP VIDEO DOWNLOADER",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = VipGold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(VipGold)
-                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(VipGold, VipAmber)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = "VIP",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "TG & ALL-FILES DOWNLOADER",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = VipGold
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(VipGold)
+                                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "👑 VIP",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Black
+                                        )
+                                    }
+                                }
                                 Text(
-                                    text = "👑 PRO",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
+                                    text = "Telegram • Files • Web • 100% Working",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = VipGoldLight,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
-                        Text(
-                            text = "YouTube • Telegram • Facebook • Instagram • Google • Web",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = VipGoldLight,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "⚡ 10+ ভিডিও একসাথে হাই-স্পিড 4K/1080p তে ডাউনলোড করুন।",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.85f)
-                        )
+
+                        // Network Live Pill Indicator
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isOnline) SuccessGreen.copy(alpha = 0.2f) else ErrorRed.copy(alpha = 0.2f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isOnline) SuccessGreen else ErrorRed)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (isOnline) "Online" else "Offline",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOnline) SuccessGreen else ErrorRed
+                                )
+                            }
+                        }
+                    }
+
+                    // Bot-Free Public Channel Notice Card
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(TelegramBlue.copy(alpha = 0.12f))
+                            .border(1.dp, TelegramBlue.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = "Public",
+                                tint = TelegramAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "✨ পাবলিক টেলিগ্রাম পোস্ট ও ফাইল বট ছাড়াই সরাসরি ডাউনলোড হবে!",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TelegramAccent
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Mode Switcher: Single Video vs Batch 10+ Videos
+        // 3. Primary Mode Switcher: Video Downloader vs All Files Downloader vs 10+ Batch
+        val currentTabIndex = when {
+            isBatchMode -> 2
+            downloaderMode == DownloaderMode.ALL_FILES -> 1
+            else -> 0
+        }
+
         TabRow(
-            selectedTabIndex = if (isBatchMode) 1 else 0,
+            selectedTabIndex = currentTabIndex,
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = VipGold,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[if (isBatchMode) 1 else 0]),
+                    Modifier.tabIndicatorOffset(tabPositions[currentTabIndex]),
                     color = VipGold
                 )
             },
@@ -224,13 +344,32 @@ fun DownloaderTab(
                 .testTag("mode_tab_row")
         ) {
             Tab(
-                selected = !isBatchMode,
-                onClick = { viewModel.toggleBatchMode(false) },
+                selected = !isBatchMode && downloaderMode == DownloaderMode.VIDEO,
+                onClick = {
+                    viewModel.toggleBatchMode(false)
+                    viewModel.setDownloaderMode(DownloaderMode.VIDEO)
+                },
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("একক ভিডিও (Single)", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("ভিডিও ডাউনলোডার", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                },
+                selectedContentColor = VipGold,
+                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Tab(
+                selected = !isBatchMode && downloaderMode == DownloaderMode.ALL_FILES,
+                onClick = {
+                    viewModel.toggleBatchMode(false)
+                    viewModel.setDownloaderMode(DownloaderMode.ALL_FILES)
+                },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("ফাইলস ও ডক্স", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 },
                 selectedContentColor = VipGold,
@@ -242,8 +381,8 @@ fun DownloaderTab(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Bolt, contentDescription = null, tint = VipGold, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("১০+ একসাথে (10+ Batch)", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("১০+ ব্যাচ", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 },
                 selectedContentColor = VipGold,
@@ -252,93 +391,144 @@ fun DownloaderTab(
         }
 
         if (!isBatchMode) {
-            // ================= SINGLE VIDEO MODE =================
+            // ================= SINGLE MODE (VIDEO OR ALL FILES) =================
 
-            // Platform Filter Row
-            val platformScrollState = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(platformScrollState),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val platforms = listOf(
-                    SupportedPlatform.ALL,
-                    SupportedPlatform.TELEGRAM,
-                    SupportedPlatform.YOUTUBE,
-                    SupportedPlatform.FACEBOOK,
-                    SupportedPlatform.INSTAGRAM,
-                    SupportedPlatform.GOOGLE_DRIVE,
-                    SupportedPlatform.WEB_DIRECT
-                )
-
-                platforms.forEach { plat ->
-                    FilterChip(
-                        selected = selectedPlatform == plat,
-                        onClick = { viewModel.onPlatformFilterChanged(plat) },
-                        label = {
-                            Text(
-                                plat.displayName,
-                                fontSize = 12.sp,
-                                fontWeight = if (selectedPlatform == plat) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(plat.colorHex).copy(alpha = 0.25f),
-                            selectedLabelColor = Color(plat.colorHex)
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = selectedPlatform == plat,
-                            selectedBorderColor = Color(plat.colorHex),
-                            selectedBorderWidth = 1.5.dp
-                        )
+            if (downloaderMode == DownloaderMode.ALL_FILES) {
+                // All Files Filter Category Chips
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "ফাইলের ধরন নির্বাচন করুন (File Filter):",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = VipGold
                     )
+                    val fileCategories = listOf(
+                        Triple("ALL", "সব ফাইল (All)", Color.White),
+                        Triple("APK", "APK অ্যাপ", ApkGreen),
+                        Triple("PDF", "PDF ডকুমেন্ট", PdfRed),
+                        Triple("ZIP", "ZIP/RAR আর্কাইভ", ZipOrange),
+                        Triple("AUDIO", "MP3 অডিও", AudioPurple),
+                        Triple("DOC", "অন্যান্য ডক্স", DocBlue)
+                    )
+                    val fileScroll = rememberScrollState()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(fileScroll),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        fileCategories.forEach { (key, label, badgeColor) ->
+                            FilterChip(
+                                selected = selectedFileFilter == key,
+                                onClick = { viewModel.setSelectedFileFilter(key) },
+                                label = {
+                                    Text(
+                                        label,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (selectedFileFilter == key) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = badgeColor.copy(alpha = 0.2f),
+                                    selectedLabelColor = badgeColor
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = selectedFileFilter == key,
+                                    selectedBorderColor = badgeColor,
+                                    selectedBorderWidth = 1.5.dp
+                                )
+                            )
+                        }
+                    }
                 }
-            }
-
-            // Video Quality Selector (4K, 1080p, 720p, 480p, MP3)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "ভিডিও রেজোলিউশন / কোয়ালিটি সিলেক্ট করুন:",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = VipGold
-                )
-                val qualityScroll = rememberScrollState()
+            } else {
+                // Platform Filter Row for Videos
+                val platformScrollState = rememberScrollState()
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(qualityScroll),
+                        .horizontalScroll(platformScrollState),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    VideoQuality.values().forEach { quality ->
+                    val platforms = listOf(
+                        SupportedPlatform.ALL,
+                        SupportedPlatform.TELEGRAM,
+                        SupportedPlatform.YOUTUBE,
+                        SupportedPlatform.FACEBOOK,
+                        SupportedPlatform.INSTAGRAM,
+                        SupportedPlatform.GOOGLE_DRIVE,
+                        SupportedPlatform.WEB_DIRECT
+                    )
+
+                    platforms.forEach { plat ->
                         FilterChip(
-                            selected = selectedQuality == quality,
-                            onClick = { viewModel.onQualityChanged(quality) },
+                            selected = selectedPlatform == plat,
+                            onClick = { viewModel.onPlatformFilterChanged(plat) },
                             label = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (quality.isVip) {
-                                        Text("👑 ", fontSize = 11.sp)
-                                    }
-                                    Text(
-                                        quality.label,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (selectedQuality == quality) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
+                                Text(
+                                    plat.displayName,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selectedPlatform == plat) FontWeight.Bold else FontWeight.Normal
+                                )
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = VipGold.copy(alpha = 0.2f),
-                                selectedLabelColor = VipGold
+                                selectedContainerColor = Color(plat.colorHex).copy(alpha = 0.25f),
+                                selectedLabelColor = Color(plat.colorHex)
                             ),
                             border = FilterChipDefaults.filterChipBorder(
                                 enabled = true,
-                                selected = selectedQuality == quality,
-                                selectedBorderColor = VipGold,
+                                selected = selectedPlatform == plat,
+                                selectedBorderColor = Color(plat.colorHex),
                                 selectedBorderWidth = 1.5.dp
                             )
                         )
+                    }
+                }
+
+                // Video Quality Selector (4K, 1080p, 720p, 480p, MP3)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "ভিডিও রেজোলিউশন / কোয়ালিটি নির্বাচন করুন:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = VipGold
+                    )
+                    val qualityScroll = rememberScrollState()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(qualityScroll),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        VideoQuality.values().forEach { quality ->
+                            FilterChip(
+                                selected = selectedQuality == quality,
+                                onClick = { viewModel.onQualityChanged(quality) },
+                                label = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (quality.isVip) {
+                                            Text("👑 ", fontSize = 11.sp)
+                                        }
+                                        Text(
+                                            quality.label,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selectedQuality == quality) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = VipGold.copy(alpha = 0.2f),
+                                    selectedLabelColor = VipGold
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = selectedQuality == quality,
+                                    selectedBorderColor = VipGold,
+                                    selectedBorderWidth = 1.5.dp
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -359,7 +549,7 @@ fun DownloaderTab(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "যেকোনো ভিডিও লিঙ্ক দিন (Paste Any Video Link)",
+                        text = if (downloaderMode == DownloaderMode.ALL_FILES) "যেকোনো ফাইল বা ডকুমেন্টের লিঙ্ক দিন" else "যেকোনো ভিডিও লিঙ্ক দিন (Paste Link)",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
@@ -373,13 +563,16 @@ fun DownloaderTab(
                             .testTag("url_input_field"),
                         placeholder = {
                             Text(
-                                "YouTube, Telegram, Facebook, Instagram, Google বা সরাসরি লিঙ্ক পেস্ট করুন",
+                                if (downloaderMode == DownloaderMode.ALL_FILES)
+                                    "টেলিগ্রাম ফাইল, PDF, APK, ZIP বা সরাসরি ডাউনলোডেবল URL পেস্ট করুন"
+                                else
+                                    "Telegram, YouTube, Facebook, Instagram, Google বা সরাসরি লিঙ্ক পেস্ট করুন",
                                 fontSize = 12.sp
                             )
                         },
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.Download,
+                                imageVector = if (downloaderMode == DownloaderMode.ALL_FILES) Icons.Default.Folder else Icons.Default.Download,
                                 contentDescription = "Link",
                                 tint = VipGold
                             )
@@ -450,127 +643,74 @@ fun DownloaderTab(
                             )
                         }
                     }
-                }
-            }
 
-            // Platform Analysis Card (Live Recognition)
-            platformAnalysis?.let { info ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color(info.platform.colorHex).copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
+                    // Optional Custom Title
+                    OutlinedTextField(
+                        value = customTitle,
+                        onValueChange = { viewModel.onCustomTitleChanged(it) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(info.platform.colorHex).copy(alpha = 0.2f))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = info.platform.badgeLabel,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(info.platform.colorHex)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.weight(1f))
-
-                            Text(
-                                text = selectedQuality.label,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = VipGold
-                            )
-                        }
-
-                        Text(
-                            text = info.infoMessage,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            .testTag("custom_title_input"),
+                        label = { Text("কাস্টম ফাইলের নাম (ঐচ্ছিক)", fontSize = 12.sp) },
+                        placeholder = { Text(if (downloaderMode == DownloaderMode.ALL_FILES) "my_document.pdf" else "my_video.mp4", fontSize = 12.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VipGold,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                         )
-
-                        OutlinedTextField(
-                            value = customTitle,
-                            onValueChange = { viewModel.onCustomTitleChanged(it) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("file_title_field"),
-                            label = { Text("Save File As (ফাইলের নাম)") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
+                    )
                 }
             }
 
-            // Download Button (Single)
+            // Primary Start Download Button
             Button(
                 onClick = { viewModel.startDownload(context) },
-                enabled = !isResolving,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .testTag("start_download_button"),
+                    .testTag("download_button"),
+                enabled = !isResolving && urlInput.isNotBlank(),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = VipGold,
-                    contentColor = Color.Black
+                    contentColor = Color.Black,
+                    disabledContainerColor = VipGold.copy(alpha = 0.4f),
+                    disabledContentColor = Color.Black.copy(alpha = 0.5f)
                 )
             ) {
                 if (isResolving) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(22.dp),
                         color = Color.Black,
-                        strokeWidth = 2.dp
+                        strokeWidth = 2.5.dp
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = resolvingMessage,
+                        text = resolvingMessage.ifBlank { "প্রস্তুত করা হচ্ছে..." },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "Download Now",
-                        tint = Color.Black,
-                        modifier = Modifier.size(22.dp)
+                        imageVector = if (downloaderMode == DownloaderMode.ALL_FILES) Icons.Default.Folder else Icons.Default.Download,
+                        contentDescription = "Download",
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "ভিডিও ডাউনলোড করুন (Download in ${selectedQuality.label})",
+                        text = if (downloaderMode == DownloaderMode.ALL_FILES) "ফাইল ডাউনলোড শুরু করুন (Download File)" else "ভিডিও ডাউনলোড শুরু করুন (Download Video)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
         } else {
-            // ================= BATCH MODE (10+ VIDEOS CONCURRENTLY) =================
+            // ================= BATCH 10+ VIDEOS / FILES MODE =================
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, VipGoldBorder, RoundedCornerShape(16.dp)),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
@@ -581,30 +721,22 @@ fun DownloaderTab(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(VipGold.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Bolt, contentDescription = null, tint = VipGold, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("১০+ ফাইল/ভিডিও একসাথে ডাউনলোড", fontWeight = FontWeight.Bold)
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "১০+ ভিডিও একসাথে ডাউনলোড (Batch Multi-Downloader)",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = VipGold
-                            )
-                            Text(
-                                text = "প্রতি লাইনে একটি করে লিঙ্ক দিন। সবগুলো একই সাথে প্যারালালে ডাউনলোড হবে।",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
+
+                        Button(
+                            onClick = { viewModel.load10SampleBatch() },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = VipGold.copy(alpha = 0.2f), contentColor = VipGold),
+                            modifier = Modifier.testTag("load_10_samples_button")
+                        ) {
+                            Text("১০টি লিংক লোড করুন", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -613,91 +745,48 @@ fun DownloaderTab(
                         onValueChange = { viewModel.onBatchUrlsChanged(it) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp)
+                            .height(150.dp)
                             .testTag("batch_urls_input"),
                         placeholder = {
-                            Text(
-                                "https://t.me/...\nhttps://youtube.com/...\nhttps://commondatastorage.googleapis.com/...\n(প্রতি লাইনে ১টি লিঙ্ক)",
-                                fontSize = 12.sp
-                            )
+                            Text("প্রতি লাইনে ১টি করে লিঙ্ক দিন (YouTube, Telegram, Web, PDF ইত্যাদি):\nhttps://...\nhttps://...", fontSize = 12.sp)
                         },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VipGold,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                        )
+                        shape = RoundedCornerShape(12.dp)
                     )
-
-                    val linesCount = batchUrlsInput.lines().filter { it.isNotBlank() }.size
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "শনাক্ত ভিডিও: $linesCount টি",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (linesCount >= 10) SuccessGreen else VipGold
-                        )
+                        Button(
+                            onClick = { viewModel.pasteFromClipboard(context) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Paste", fontSize = 12.sp)
+                        }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilledTonalButton(
-                                onClick = { viewModel.pasteFromClipboard(context) },
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Paste", fontSize = 12.sp)
-                            }
-
-                            OutlinedButton(
-                                onClick = { viewModel.clearBatchInput() },
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Clear", fontSize = 12.sp)
+                        if (batchUrlsInput.isNotBlank()) {
+                            IconButton(onClick = { viewModel.clearBatchInput() }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear")
                             }
                         }
-                    }
-
-                    // Quick Load 10 High Speed Links Button
-                    FilledTonalButton(
-                        onClick = { viewModel.load10SampleBatch() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("load_10_samples_button"),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = VipGold.copy(alpha = 0.15f),
-                            contentColor = VipGold
-                        )
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "🚀 ১০টি হাই-স্পিড ভিডিও লোড করুন (Load 10 Samples)",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
                     }
                 }
             }
 
-            // Batch Download Button
-            val batchCount = batchUrlsInput.lines().filter { it.isNotBlank() }.size
+            val batchCount = batchUrlsInput.lines().count { it.trim().isNotBlank() }
             Button(
                 onClick = { viewModel.startBatchDownload(context) },
-                enabled = !isResolving && batchCount > 0,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
-                    .testTag("start_batch_download_button"),
+                    .testTag("start_batch_button"),
+                enabled = !isResolving && batchCount > 0,
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = VipGold,
-                    contentColor = Color.Black
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = VipGold, contentColor = Color.Black)
             ) {
                 if (isResolving) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
@@ -707,7 +796,7 @@ fun DownloaderTab(
                     Icon(Icons.Default.Bolt, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "⚡ এক ক্লিকে $batchCount টি ভিডিও একসাথে ডাউনলোড করুন",
+                        text = "⚡ এক ক্লিকে $batchCount টি আইটেম একসাথে ডাউনলোড করুন",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -759,7 +848,7 @@ fun DownloaderTab(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "১০+ প্যারালাল কানেকশন ও বড় ভিডিও রেজিউম সক্রিয়",
+                            text = "১০+ প্যারালাল কানেকশন ও অটো-রেজিউম সক্রিয়",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
@@ -912,20 +1001,26 @@ fun DownloaderTab(
             }
         }
 
-        // Quick Multi-Platform Samples Section
+        // Quick 100% Tested Working Samples Section
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "সরাসরি টেস্ট করুন (Multi-Platform Demo Videos):",
+                text = if (downloaderMode == DownloaderMode.ALL_FILES)
+                    "১০০% কার্যকরী টেস্ট ফাইলস (100% Tested Working Files):"
+                else
+                    "১০০% কার্যকরী টেস্ট ভিডিও (100% Tested Working Videos):",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
-                text = "বিভিন্ন প্ল্যাটফর্মের হাই-কোয়ালিটি ভিডিও এক ক্লিকে টেস্ট করুন:",
+                text = if (downloaderMode == DownloaderMode.ALL_FILES)
+                    "পিডিএফ, অডিও ও আর্কাইভ ফাইল এক ক্লিকে টেস্ট করুন:"
+                else
+                    "পাবলিক টেলিগ্রাম পোস্ট ও বিভিন্ন প্ল্যাটফর্মের ভিডিও এক ক্লিকে টেস্ট করুন:",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -947,6 +1042,15 @@ fun SampleItemCard(
     sample: SampleLink,
     onClick: () -> Unit
 ) {
+    val badgeColor = when {
+        sample.badge.contains("TG Public") -> TelegramAccent
+        sample.badge.contains("PDF") -> PdfRed
+        sample.badge.contains("Audio") || sample.badge.contains("MP3") -> AudioPurple
+        sample.badge.contains("ZIP") -> ZipOrange
+        sample.badge.contains("Private") -> WarningAmber
+        else -> VipGold
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -983,14 +1087,14 @@ fun SampleItemCard(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(Color(sample.platform.colorHex).copy(alpha = 0.2f))
+                    .background(badgeColor.copy(alpha = 0.2f))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = sample.sizeText,
+                    text = sample.badge,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(sample.platform.colorHex)
+                    color = badgeColor
                 )
             }
         }
